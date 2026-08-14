@@ -1,0 +1,8 @@
+const ROLES = {
+  ADMIN_DISPATCHER: 'ADMIN_DISPATCHER',
+  TECHNICIAN: 'TECHNICIAN'
+};
+
+module.exports = {
+  ROLES
+};
