@@ -9,16 +9,16 @@ export const LoginHeader: FC = () => {
           <path
             d='M25 35 L41 65 L50 48 L59 65 L75 35'
             stroke='white'
-            stroke-width='12'
-            stroke-linecap='round'
-            stroke-linejoin='round'
+            strokeWidth='12'
+            strokeLinecap='round'
+            strokeLinejoin='round'
           />
           <path
             d='M35 50 L50 25 L65 50'
             stroke='white'
-            stroke-width='12'
-            stroke-linecap='round'
-            stroke-linejoin='round'
+            strokeWidth='12'
+            strokeLinecap='round'
+            strokeLinejoin='round'
             opacity='0.9'
           />
         </svg>

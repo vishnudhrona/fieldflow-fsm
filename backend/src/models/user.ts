@@ -13,14 +13,14 @@ export interface UserAttributes {
 }
 
 export class User extends Model<UserAttributes> implements UserAttributes {
-  public id!: string;
-  public name!: string;
-  public email!: string;
-  public passwordHash!: string;
-  public role!: Role;
-  public phone!: string | null;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
+  declare id: string;
+  declare name: string;
+  declare email: string;
+  declare passwordHash: string;
+  declare role: Role;
+  declare phone: string | null;
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
 }
 
 export default function(sequelize: Sequelize, dataTypes: typeof DataTypes) {

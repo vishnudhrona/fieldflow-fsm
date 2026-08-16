@@ -2,6 +2,8 @@ import { Sequelize, DataTypes } from 'sequelize';
 import dotenv from 'dotenv';
 import configObject from '../config/config';
 import UserModelInit from './user';
+import CustomerModelInit from './customer';
+import MenuModelInit from './menu';
 
 dotenv.config();
 
@@ -20,12 +22,16 @@ if (config.use_env_variable) {
 }
 
 const User = UserModelInit(sequelize, DataTypes);
+const Customer = CustomerModelInit(sequelize, DataTypes);
+const Menu = MenuModelInit(sequelize, DataTypes);
 
 const db = {
   sequelize,
   Sequelize,
-  User
+  User,
+  Customer,
+  Menu,
 };
 
-export { sequelize, Sequelize, User };
+export { sequelize, Sequelize, User, Customer, Menu };
 export default db;

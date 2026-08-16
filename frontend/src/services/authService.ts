@@ -5,6 +5,16 @@ export enum UserRole {
   TECHNICIAN = 'TECHNICIAN'
 }
 
+export const ROLE_LABELS: Record<UserRole, string> = {
+  [UserRole.ADMIN_DISPATCHER]: 'Administrator',
+  [UserRole.TECHNICIAN]: 'Field Technician',
+};
+
+export const getRoleLabel = (role?: UserRole | string | null): string => {
+  if (!role) return 'Guest';
+  return ROLE_LABELS[role as UserRole] || role;
+};
+
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -33,17 +43,11 @@ export const authService = {
     return response.data;
   },
 
-  /**
-   * Log out and clear local credentials
-   */
   logout(): void {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
   },
-
-  /**
-   * Check if token exists
-   */
+  
   isAuthenticated(): boolean {
     return !!localStorage.getItem('auth_token');
   }

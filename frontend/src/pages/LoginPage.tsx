@@ -1,9 +1,9 @@
 import { useState, type FC } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { Input, Button } from '../components/common';
+import { Input, Button } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { type LoginCredentials, UserRole } from '../services/authService';
+import { type LoginCredentials } from '../services/authService';
 
 export const LoginPage: FC = () => {
   const { register, handleSubmit } = useForm<LoginCredentials>();
@@ -13,12 +13,8 @@ export const LoginPage: FC = () => {
 
   const onSubmit = async (data: LoginCredentials) => {
     try {
-      const user = await login(data);
-      if (user?.role === UserRole.ADMIN_DISPATCHER) {
-        navigate('/');
-      } else {
-        navigate('/guide');
-      }
+      await login(data);
+      navigate('/');
     } catch (err: any) {
       setApiMessage(err?.response?.data?.message || err?.message || 'Failed to authenticate with backend');
     }
