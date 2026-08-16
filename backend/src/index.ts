@@ -2,6 +2,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import { sequelize } from './models/index';
 import authRoutes from './routes/authRoutes';
+import customerRoutes from './routes/customerRoutes';
+import menuRoutes from './routes/menuRoutes';
 
 dotenv.config();
 
@@ -21,6 +23,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/menus', menuRoutes);
 
 app.get('/api/health/ready', async (req: Request, res: Response) => {
   try {

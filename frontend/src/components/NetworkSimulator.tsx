@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { Wifi, WifiOff, type LucideIcon } from 'lucide-react';
 import { useNetwork, type NetworkMode } from '../context/NetworkContext';
+import { Button } from './ui';
 
 interface ModeConfig {
   value: NetworkMode;
@@ -33,7 +34,7 @@ export const NetworkSimulator: FC<NetworkSimulatorProps> = ({ mode = 'simulator'
   const currentActiveMode = browserOnline ? networkMode : 'OFFLINE';
 
   return (
-    <div className="flex flex-col items-center mb-6 z-10 select-none w-full">
+    <>
       {mode === 'badge' ? (
         <div className="mb-2">
           <span className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border transition-all duration-300 ${
@@ -53,27 +54,28 @@ export const NetworkSimulator: FC<NetworkSimulatorProps> = ({ mode = 'simulator'
             const isDisabled = !browserOnline && m.value !== 'OFFLINE';
             
             return (
-              <button
+              <Button
                 key={m.value}
-                type="button"
-                onClick={() => !isDisabled && setNetworkMode(m.value)}
+                variant='ghost'
+                size='sm'
                 disabled={isDisabled}
-                className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-full border border-transparent transition-all duration-200 ${
+                onClick={() => !isDisabled && setNetworkMode(m.value)}
+                leftIcon={<Icon className="w-3.5 h-3.5" />}
+                className={`px-3 py-1 text-xs rounded-full border transition-all duration-200 shadow-none hover:bg-transparent ${
                   isActive 
                     ? m.activeClass 
                     : isDisabled
-                      ? 'text-slate-355 opacity-40 cursor-not-allowed'
-                      : 'text-slate-400 hover:text-slate-600 cursor-pointer'
+                      ? 'text-slate-300 opacity-40 border-transparent'
+                      : 'text-slate-400 hover:text-slate-600 border-transparent'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{m.label}</span>
-              </button>
+                {m.label}
+              </Button>
             );
           })}
         </div>
       )}
-    </div>
+    </>
   );
 };
 

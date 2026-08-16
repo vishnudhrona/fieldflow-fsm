@@ -25,7 +25,6 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
-// Color palettes per variant
 const primaryColorStyles: Record<ButtonColor, string> = {
   sky: 'bg-sky-500 text-slate-950 hover:bg-sky-400 border-sky-400/30 focus-visible:ring-sky-400',
   blue: 'bg-blue-600 text-white hover:bg-blue-500 border-blue-500/30 focus-visible:ring-blue-400',

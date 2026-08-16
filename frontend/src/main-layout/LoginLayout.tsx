@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom';
-import LoginHeader from '../components/LoginHeader';
+import { LoginHeader } from '../components/auth';
 import NetworkSimulator from '../components/NetworkSimulator';
 
 const LoginLayout = () => {
