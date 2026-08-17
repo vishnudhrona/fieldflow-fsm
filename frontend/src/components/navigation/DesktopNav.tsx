@@ -25,7 +25,7 @@ export const DesktopNav: FC<DesktopNavProps> = ({ storageUsageText }) => {
       ? `${Math.round(storage.percentUsed || 72)}% of ${storage.quotaFormatted || '2GB'} used`
       : '72% of 2GB used');
 
-  const displayName = user?.name || 'Admin';
+  const displayName = user?.name;
   const displayRole = getRoleLabel(user?.role);
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -37,7 +37,7 @@ export const DesktopNav: FC<DesktopNavProps> = ({ storageUsageText }) => {
     >
 
       <div className='flex items-center gap-2.5 lg:gap-3.5 shrink-0'>
-        <NetworkSimulator mode='badge' />
+        <NetworkSimulator />
 
         <div className='hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-2xs'>
           <Database className='w-3.5 h-3.5 text-slate-500' />

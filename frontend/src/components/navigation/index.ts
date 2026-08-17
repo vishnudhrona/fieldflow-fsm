@@ -11,4 +11,4 @@ export { Sidebar } from './Sidebar';
 export type { SidebarProps, SidebarNavItem, SidebarSection } from './Sidebar';
 
 export { SubpageHeader } from './SubpageHeader';
-export type { SubpageHeaderProps } from './SubpageHeader';
+export type { SubpageHeaderProps, HeaderActionItem } from './SubpageHeader';

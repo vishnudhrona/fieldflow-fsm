@@ -4,6 +4,7 @@ import configObject from '../config/config';
 import UserModelInit from './user';
 import CustomerModelInit from './customer';
 import MenuModelInit from './menu';
+import AssetModelInit from './asset';
 
 dotenv.config();
 
@@ -24,6 +25,10 @@ if (config.use_env_variable) {
 const User = UserModelInit(sequelize, DataTypes);
 const Customer = CustomerModelInit(sequelize, DataTypes);
 const Menu = MenuModelInit(sequelize, DataTypes);
+const Asset = AssetModelInit(sequelize, DataTypes);
+
+Customer.hasMany(Asset, { foreignKey: 'customerId', as: 'assets', onDelete: 'SET NULL' });
+Asset.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' });
 
 const db = {
   sequelize,
@@ -31,7 +36,8 @@ const db = {
   User,
   Customer,
   Menu,
+  Asset,
 };
 
-export { sequelize, Sequelize, User, Customer, Menu };
+export { sequelize, Sequelize, User, Customer, Menu, Asset };
 export default db;

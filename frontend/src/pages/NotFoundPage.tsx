@@ -24,7 +24,7 @@ export const NotFoundPage: FC = () => {
         </p>
 
         <Link 
-          to="/login" 
+          to="/" 
           className='inline-flex items-center justify-center gap-2 rounded-xl py-3 px-6 text-sm font-extrabold text-white tracking-widest bg-[#D12026] hover:bg-[#B11A1F] active:bg-[#911519] w-full transition-all duration-200 shadow-md border-0 uppercase hover:scale-[1.02] active:scale-[0.98]'
         >
           <Home className="w-4 h-4" />

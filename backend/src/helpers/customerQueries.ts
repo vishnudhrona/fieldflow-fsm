@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { Customer, type CustomerAttributes } from '../models/customer';
+import { Asset } from '../models/asset';
 
 export const findCustomerByEmail = async (email: string) => {
   return await Customer.findOne({
@@ -27,12 +28,27 @@ export const findAllCustomers = async (search?: string) => {
 
   return await Customer.findAll({
     where: whereClause,
+    include: [
+      {
+        model: Asset,
+        as: 'assets',
+        attributes: ['id'],
+      },
+    ],
     order: [['created_at', 'DESC']],
   });
 };
 
 export const findCustomerById = async (id: string) => {
-  return await Customer.findByPk(id);
+  return await Customer.findByPk(id, {
+    include: [
+      {
+        model: Asset,
+        as: 'assets',
+      },
+    ],
+    order: [[{ model: Asset, as: 'assets' }, 'created_at', 'DESC']],
+  });
 };
 
 export const updateCustomerById = async (id: string, updates: Partial<CustomerAttributes>) => {

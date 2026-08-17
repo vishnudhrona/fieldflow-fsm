@@ -28,5 +28,5 @@ export type { TabsProps, TabItem } from './Tabs';
 export { StatusBadge } from './StatusBadge';
 export type { StatusBadgeProps, StatusType } from './StatusBadge';
 
-
-
+export { ImageUpload } from './ImageUpload';
+export type { ImageUploadProps, ImageFileItem } from './ImageUpload';

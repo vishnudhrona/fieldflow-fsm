@@ -89,7 +89,7 @@ export function Table<T = any>({
   };
 
   return (
-    <div className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs ${className}`}>
+    <div className={`w-full rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden ${className}`}>
       <div className='overflow-x-auto'>
         <table className='w-full border-collapse text-left text-xs'>
           <thead className={`bg-slate-50/80 border-b border-slate-200 select-none ${headerClassName}`}>

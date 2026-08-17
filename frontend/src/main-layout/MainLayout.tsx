@@ -1,21 +1,29 @@
 import { useState, useEffect, type FC } from 'react';
 import { Outlet } from 'react-router-dom';
+import { Home, Users, ClipboardList, User } from 'lucide-react';
 import { BottomNav, DesktopNav, Sidebar, type BottomNavItem } from '../components/navigation';
 import { menuService } from '../services/menuService';
 import { useAuth } from '../context/AuthContext';
 
+const DEFAULT_NAV_ITEMS: BottomNavItem[] = [
+  { id: 'home', label: 'Home', icon: Home, path: '/' },
+  { id: 'customers', label: 'Customers', icon: Users, path: '/customers' },
+  { id: 'work-orders', label: 'Work Orders', icon: ClipboardList, path: '/work-orders' },
+  { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
+];
+
 export const MainLayout: FC = () => {
   const { user } = useAuth();
-  const [navItems, setNavItems] = useState<BottomNavItem[]>([]);
+  const [navItems, setNavItems] = useState<BottomNavItem[]>(DEFAULT_NAV_ITEMS);
 
   const loadRoleMenus = async () => {
     try {
       const dynamicMenus = await menuService.getMenus();
-      if (dynamicMenus.length > 0) {
+      if (dynamicMenus && dynamicMenus.length > 0) {
         setNavItems(dynamicMenus);
       }
-    } catch (err) {
-      console.error('Failed to load dynamic role menus from database:', err);
+    } catch {
+      setNavItems(DEFAULT_NAV_ITEMS);
     }
   };
 

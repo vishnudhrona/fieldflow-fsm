@@ -4,6 +4,8 @@ import { sequelize } from './models/index';
 import authRoutes from './routes/authRoutes';
 import customerRoutes from './routes/customerRoutes';
 import menuRoutes from './routes/menuRoutes';
+import uploadRoutes from './routes/uploadRoutes';
+import assetRoutes from './routes/assetRoutes';
 
 dotenv.config();
 
@@ -25,6 +27,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/menus', menuRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/assets', assetRoutes);
 
 app.get('/api/health/ready', async (req: Request, res: Response) => {
   try {
