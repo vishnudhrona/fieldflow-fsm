@@ -16,14 +16,8 @@ export const getMenus = async (req: AuthenticatedRequest, res: Response): Promis
         })
       : allMenus;
 
-    res.status(200).json({
-      menus,
-      total: menus.length,
-    });
+    res.status(200).json({ menus, total: menus.length });
   } catch (error: any) {
-    res.status(500).json({
-      message: 'Internal server error while fetching menus',
-      error: error?.message,
-    });
+    res.status(500).json({ message: 'Internal server error while fetching menus', error: error?.message });
   }
 };

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode, type FC } from 'react';
+import { createContext, useContext, useState, type ReactNode, type FC } from 'react';
 import { authService, type LoginCredentials, type AuthResponse } from '../services/authService';
 
 interface AuthContextType {
@@ -12,27 +12,33 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthResponse['user'] | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    const storedUser = localStorage.getItem('auth_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error('Failed to parse stored auth user', e);
+  const [user, setUser] = useState<AuthResponse['user'] | null>(() => {
+    try {
+      const storedUser = localStorage.getItem('auth_user');
+      const token = localStorage.getItem('auth_token');
+      if (storedUser && token) {
+        return JSON.parse(storedUser);
       }
+    } catch {
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth_token');
     }
-    setIsLoading(false);
-  }, []);
+    return null;
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const login = async (credentials: LoginCredentials) => {
-    const response = await authService.login(credentials);
-    if (response.user) {
-      setUser(response.user);
+    setIsLoading(true);
+    try {
+      const response = await authService.login(credentials);
+      if (response.user) {
+        setUser(response.user);
+      }
+      return response.user;
+    } finally {
+      setIsLoading(false);
     }
-    return response.user;
   };
 
   const logout = () => {
@@ -40,7 +46,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     setUser(null);
   };
 
-  const isAuthenticated = !!user;
+  const isAuthenticated = Boolean(user);
 
   return (
     <AuthContext.Provider value={{ user, login, logout, isAuthenticated, isLoading }}>

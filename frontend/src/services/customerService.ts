@@ -1,4 +1,19 @@
 import api from './api';
+import type { Asset } from './assetService';
+
+export interface Customer {
+  id: string;
+  name: string;
+  contactPerson?: string;
+  phone: string;
+  countryCode?: string;
+  email: string;
+  address: string;
+  notes?: string;
+  status?: 'ACTIVE' | 'INACTIVE' | boolean;
+  assetsCount?: number;
+  activeOrders?: number;
+}
 
 export interface CreateCustomerDTO {
   name: string;
@@ -19,6 +34,7 @@ export interface CustomerResponse {
   address: string;
   notes?: string | null;
   status: boolean;
+  assets?: Asset[];
   createdAt: string;
   updatedAt: string;
 }

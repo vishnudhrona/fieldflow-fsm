@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo, type FC } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, UserPlus, Edit, UserX, UserCheck } from 'lucide-react';
-import { CustomerCard, type Customer } from '../components/customers';
-import { Table, TableActionMenu, Button, Input, StatusBadge, type Column } from '../components/ui';
+import { Table, TableActionMenu, Button, Input, StatusBadge, EntityCard, type Column } from '../components/ui';
 import { mapObjectValues } from '../utils';
 import { CUSTOMER_COLUMNS } from '../constants';
 import { useDebounce } from '../hooks';
-import { getCustomers, updateCustomer } from '../services/customerService';
+import { getCustomers, updateCustomer, type Customer } from '../services/customerService';
 
 export const CustomersPage: FC = () => {
   const navigate = useNavigate();
@@ -16,7 +15,7 @@ export const CustomersPage: FC = () => {
 
   const fetchCustomers = async (searchQuery?: string) => {
     try {
-      const data = await getCustomers(searchQuery);
+      const data = await getCustomers(searchQuery);      
       const mapped: Customer[] = data.map((c) => ({
         id: c.id,
         name: c.name,
@@ -26,11 +25,12 @@ export const CustomersPage: FC = () => {
         address: c.address,
         notes: c.notes || undefined,
         status: c.status ? 'ACTIVE' : 'INACTIVE',
+        assetsCount: c.assets.length,
         activeOrders: 0,
       }));
       setCustomers(mapped);
     } catch (err: any) {
-      console.error('Failed to fetch customers:', err);
+      alert(err?.response?.data?.message || 'Failed to fetch customers. Please check your connection.');
     }
   };
 
@@ -39,14 +39,16 @@ export const CustomersPage: FC = () => {
   }, [debouncedSearchTerm]);
 
   const handleToggleStatus = async (customer: Customer) => {
-    const nextStatusBool = customer.status !== 'ACTIVE';
+    const previousStatus = customer.status;
+    const nextStatusBool = previousStatus !== 'ACTIVE';
+    const nextStatusText = nextStatusBool ? 'ACTIVE' : 'INACTIVE';
+    setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, status: nextStatusText } : c)));
+
     try {
       await updateCustomer(customer.id, { status: nextStatusBool });
-      setCustomers((prev) =>
-        prev.map((c) => (c.id === customer.id ? { ...c, status: nextStatusBool ? 'ACTIVE' : 'INACTIVE' } : c)),
-      );
-    } catch (err) {
-      console.error('Failed to toggle customer status:', err);
+    } catch (err: any) {
+      setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, status: previousStatus } : c)));
+      alert(err?.response?.data?.message || 'Failed to update customer status. Please try again.');
     }
   };
 
@@ -59,9 +61,7 @@ export const CustomersPage: FC = () => {
         header: 'Status',
         accessor: 'status',
         align: 'center',
-        cell: (customer: Customer) => (
-          <StatusBadge status={customer.status === 'ACTIVE'} rounded='full' size='xs' />
-        ),
+        cell: (customer: Customer) => <StatusBadge status={customer.status === 'ACTIVE'} rounded='full' size='xs' />,
       },
       {
         header: 'Actions',
@@ -89,7 +89,7 @@ export const CustomersPage: FC = () => {
         ),
       },
     ];
-  }, []);
+  }, [customers]);
 
   return (
     <div className='space-y-5'>
@@ -117,17 +117,22 @@ export const CustomersPage: FC = () => {
       />
 
       <div className='block md:hidden space-y-3'>
-        {customers.map((customer) => (
-          <CustomerCard key={customer.id} customer={customer} onClick={(c) => navigate(`/customers/${c.id}`)} />
+        {customers?.map((customer) => (
+          <EntityCard
+            key={customer?.id}
+            title={customer?.name}
+            subtitle={customer?.phone}
+            location={customer?.address}
+            statusBadgeValue={customer?.status === 'ACTIVE'}
+            leftStat={`${customer?.assetsCount ?? 0} Assets`}
+            rightStat={`${customer?.activeOrders ?? 0} Active Jobs`}
+            onClick={() => navigate(`/customers/${customer.id}`)}
+          />
         ))}
       </div>
 
       <div className='hidden md:block'>
-        <Table
-          columns={columns}
-          data={customers}
-          onRowClick={(customer) => navigate(`/customers/${customer.id}`)}
-        />
+        <Table columns={columns} data={customers} onRowClick={(customer) => navigate(`/customers/${customer.id}`)} />
       </div>
     </div>
   );

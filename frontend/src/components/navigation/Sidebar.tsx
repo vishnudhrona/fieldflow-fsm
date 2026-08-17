@@ -97,13 +97,22 @@ export const Sidebar: FC<SidebarProps> = ({
       <div className='flex items-center justify-between px-2 mb-6'>
         <Link to='/' onClick={onCloseMobile} className='flex items-center gap-3 group focus:outline-none'>
           <div className='w-9 h-9 rounded-xl bg-gradient-to-br from-[#E11D48] to-[#D12026] flex items-center justify-center text-white shadow-sm shrink-0 transition-transform group-hover:scale-105'>
-            <svg className='w-5 h-5 fill-white' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
+            <svg className='w-8 h-8' viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'>
+              <rect width='100' height='100' rx='24' fill='#D12026' />
               <path
-                d='M5 19L11 5L15 13L19 5'
+                d='M25 35 L41 65 L50 48 L59 65 L75 35'
                 stroke='white'
-                strokeWidth='3.5'
+                strokeWidth='12'
                 strokeLinecap='round'
                 strokeLinejoin='round'
+              />
+              <path
+                d='M35 50 L50 25 L65 50'
+                stroke='white'
+                strokeWidth='12'
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                opacity='0.9'
               />
             </svg>
           </div>

@@ -1,2 +1,2 @@
-export { CustomerCard } from './CustomerCard';
-export type { Customer, CustomerCardProps } from './CustomerCard';
+export { AssetDetails } from './AssetDetails';
+export type { AssetDetailsProps, AssetItem } from './AssetDetails';

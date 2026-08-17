@@ -6,6 +6,7 @@ interface NetworkContextType {
   isOnline: boolean;
   browserOnline: boolean;
   networkMode: NetworkMode;
+  reconnectCount: number;
   setNetworkMode: (mode: NetworkMode) => void;
 }
 
@@ -19,6 +20,7 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [networkMode, setNetworkModeState] = useState<NetworkMode>(() => {
     return (localStorage.getItem('fsm_simulated_network') as NetworkMode) || 'ONLINE';
   });
+  const [reconnectCount, setReconnectCount] = useState(0);
 
   useEffect(() => {
     const pingUrl = 'https://clients3.google.com/generate_204';
@@ -35,13 +37,19 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         await fetch(pingUrl, {
           method: 'GET',
-          mode: 'no-cors', 
+          mode: 'no-cors',
           cache: 'no-store',
-          signal: controller.signal
+          signal: controller.signal,
         });
         clearTimeout(timeoutId);
 
-        setBrowserOnline(true);
+        setBrowserOnline((prev) => {
+          if (!prev && networkMode !== 'OFFLINE') {
+            setReconnectCount((c) => c + 1);
+            window.dispatchEvent(new CustomEvent('app:online_reconnect'));
+          }
+          return true;
+        });
       } catch (err) {
         setBrowserOnline(false);
       }
@@ -49,6 +57,10 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     const handleOnline = () => {
       checkConnectivity();
+      if (networkMode !== 'OFFLINE') {
+        setReconnectCount((c) => c + 1);
+        window.dispatchEvent(new CustomEvent('app:online_reconnect'));
+      }
     };
 
     const handleOffline = () => {
@@ -66,17 +78,21 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
       window.removeEventListener('offline', handleOffline);
       clearInterval(intervalId);
     };
-  }, []);
+  }, [networkMode]);
 
   const setNetworkMode = (mode: NetworkMode) => {
     localStorage.setItem('fsm_simulated_network', mode);
     setNetworkModeState(mode);
+    if (mode === 'ONLINE' && browserOnline) {
+      setReconnectCount((c) => c + 1);
+      window.dispatchEvent(new CustomEvent('app:online_reconnect'));
+    }
   };
 
   const isOnline = browserOnline && networkMode !== 'OFFLINE';
 
   return (
-    <NetworkContext.Provider value={{ isOnline, browserOnline, networkMode, setNetworkMode }}>
+    <NetworkContext.Provider value={{ isOnline, browserOnline, networkMode, reconnectCount, setNetworkMode }}>
       {children}
     </NetworkContext.Provider>
   );

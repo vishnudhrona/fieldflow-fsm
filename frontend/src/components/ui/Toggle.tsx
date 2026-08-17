@@ -1,6 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../../lib/utils';
-import { Button } from './Button';
 
 export type ToggleColor =
   | 'rose'
@@ -26,13 +25,13 @@ export interface ToggleProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 }
 
 const colorStyles: Record<ToggleColor, string> = {
-  rose: 'bg-[#D12026] hover:bg-[#D12026]',
-  sky: 'bg-sky-500 hover:bg-sky-500',
-  blue: 'bg-blue-600 hover:bg-blue-600',
-  emerald: 'bg-emerald-500 hover:bg-emerald-500',
-  indigo: 'bg-indigo-600 hover:bg-indigo-600',
-  amber: 'bg-amber-500 hover:bg-amber-500',
-  slate: 'bg-slate-700 hover:bg-slate-700',
+  rose: 'bg-[#D12026]',
+  sky: 'bg-sky-500',
+  blue: 'bg-blue-600',
+  emerald: 'bg-emerald-500',
+  indigo: 'bg-indigo-600',
+  amber: 'bg-amber-500',
+  slate: 'bg-slate-700',
 };
 
 const sizeStyles: Record<
@@ -44,19 +43,19 @@ const sizeStyles: Record<
   }
 > = {
   sm: {
-    track: 'h-5 w-9',
-    thumb: 'h-4 w-4',
-    translate: 'translate-x-4',
+    track: 'w-8 h-4.5 p-0.5',
+    thumb: 'w-3.5 h-3.5',
+    translate: 'translate-x-3.5',
   },
   md: {
-    track: 'h-6 w-11',
-    thumb: 'h-5 w-5',
+    track: 'w-11 h-6 p-0.5',
+    thumb: 'w-5 h-5',
     translate: 'translate-x-5',
   },
   lg: {
-    track: 'h-7 w-14',
-    thumb: 'h-6 w-6',
-    translate: 'translate-x-7',
+    track: 'w-14 h-7.5 p-1',
+    thumb: 'w-5.5 h-5.5',
+    translate: 'translate-x-6.5',
   },
 };
 
@@ -89,31 +88,35 @@ export const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(
     const currentColor = colorStyles[color];
 
     const switchElement = (
-      <Button
+      <button
         ref={ref}
         id={id}
-        variant='ghost'
+        type='button'
         role='switch'
         aria-checked={checked}
         disabled={disabled}
-        onClick={handleToggle}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleToggle();
+        }}
         className={cn(
-          'relative inline-flex shrink-0 p-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out shadow-none hover:bg-transparent min-w-0',
+          'relative inline-flex shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none select-none items-center border-0 outline-none',
           currentSize.track,
-          checked ? currentColor : 'bg-slate-300 hover:bg-slate-300',
+          checked ? currentColor : 'bg-slate-300',
           disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
           className
         )}
         {...rest}
       >
         <span
+          aria-hidden='true'
           className={cn(
-            'pointer-events-none inline-block transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out',
+            'pointer-events-none inline-block rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out',
             currentSize.thumb,
             checked ? currentSize.translate : 'translate-x-0'
           )}
         />
-      </Button>
+      </button>
     );
 
     if (!label && !description) {
@@ -123,7 +126,7 @@ export const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(
     return (
       <div
         className={cn(
-          'flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80 cursor-pointer select-none',
+          'flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80 cursor-pointer select-none transition-all hover:bg-slate-100/60',
           disabled && 'opacity-60 cursor-not-allowed',
           containerClassName
         )}
@@ -136,7 +139,7 @@ export const Toggle = forwardRef<HTMLButtonElement, ToggleProps>(
             </span>
           )}
           {description && (
-            <span className={cn('text-[11px] text-slate-500', descriptionClassName)}>
+            <span className={cn('text-[11px] text-slate-500 mt-0.5', descriptionClassName)}>
               {description}
             </span>
           )}

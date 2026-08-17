@@ -32,10 +32,10 @@ const statusColorMap: Record<string, { bg: string; text: string; border: string;
     defaultLabel: 'Active',
   },
   INACTIVE: {
-    bg: 'bg-slate-100',
-    text: 'text-slate-600',
-    border: 'border-slate-200',
-    dot: 'bg-slate-400',
+    bg: 'bg-red-100',
+    text: 'text-red-600',
+    border: 'border-red-200',
+    dot: 'bg-red-400',
     defaultLabel: 'Inactive',
   },
   UNDER_SERVICE: {

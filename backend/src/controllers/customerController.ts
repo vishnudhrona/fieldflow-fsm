@@ -24,18 +24,14 @@ export const createCustomer = async (req: Request, res: Response): Promise<void>
     const status = sanitizeBoolean(req.body.status, true);
 
     if (!name || !phone || !email || !address) {
-      res.status(400).json({
-        message: 'Validation error: Name, phone, email, and address are required.',
-      });
+      res.status(400).json({ message: 'Validation error: Name, phone, email, and address are required.' });
       return;
     }
 
     const existingCustomer = await findCustomerByEmail(email);
 
     if (existingCustomer) {
-      res.status(409).json({
-        message: 'A customer with this email address already exists.',
-      });
+      res.status(409).json({ message: 'A customer with this email address already exists.' });
       return;
     }
 
@@ -49,21 +45,13 @@ export const createCustomer = async (req: Request, res: Response): Promise<void>
       status,
     });
 
-    res.status(201).json({
-      message: 'Customer created successfully',
-      customer: newCustomer,
-    });
+    res.status(201).json({ message: 'Customer created successfully', customer: newCustomer });
   } catch (error: any) {
     if (error?.name === 'SequelizeValidationError' || error?.name === 'SequelizeUniqueConstraintError') {
-      res.status(400).json({
-        message: error.errors?.[0]?.message || 'Validation error',
-      });
+      res.status(400).json({ message: error.errors?.[0]?.message || 'Validation error' });
       return;
     }
-    res.status(500).json({
-      message: 'Internal server error while creating customer',
-      error: error?.message,
-    });
+    res.status(500).json({ message: 'Internal server error while creating customer', error: error?.message });
   }
 };
 
@@ -72,15 +60,9 @@ export const getCustomers = async (req: Request, res: Response): Promise<void> =
     const search = typeof req.query.search === 'string' ? req.query.search : undefined;
     const customers = await findAllCustomers(search);
 
-    res.status(200).json({
-      customers,
-      total: customers.length,
-    });
+    res.status(200).json({ customers, total: customers.length });
   } catch (error: any) {
-    res.status(500).json({
-      message: 'Internal server error while fetching customers',
-      error: error?.message,
-    });
+    res.status(500).json({ message: 'Internal server error while fetching customers', error: error?.message });
   }
 };
 
@@ -96,10 +78,7 @@ export const getCustomerById = async (req: Request, res: Response): Promise<void
 
     res.status(200).json({ customer });
   } catch (error: any) {
-    res.status(500).json({
-      message: 'Internal server error while fetching customer',
-      error: error?.message,
-    });
+    res.status(500).json({ message: 'Internal server error while fetching customer', error: error?.message });
   }
 };
 
@@ -123,14 +102,8 @@ export const updateCustomer = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    res.status(200).json({
-      message: 'Customer updated successfully',
-      customer: updated,
-    });
+    res.status(200).json({ message: 'Customer updated successfully', customer: updated });
   } catch (error: any) {
-    res.status(500).json({
-      message: 'Internal server error while updating customer',
-      error: error?.message,
-    });
+    res.status(500).json({ message: 'Internal server error while updating customer', error: error?.message });
   }
 };

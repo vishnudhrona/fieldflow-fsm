@@ -61,8 +61,7 @@ export const AddCustomerPage: FC = () => {
           status: customer.status,
         });
       } catch (err: any) {
-        console.error('Failed to load customer details:', err);
-        setErrorMessage(err?.response?.data?.message || 'Failed to load customer data.');
+        setErrorMessage(err?.response?.data?.message);
       } finally {
         setIsLoading(false);
       }
@@ -70,6 +69,8 @@ export const AddCustomerPage: FC = () => {
 
     fetchCustomerDetails();
   }, [id, isEditMode, reset]);
+
+  const backPath = isEditMode && id ? `/customers/${id}` : '/customers';
 
   const onSubmit = async (data: AddCustomerFormData) => {
     setIsSubmitting(true);
@@ -80,9 +81,8 @@ export const AddCustomerPage: FC = () => {
       } else {
         await createCustomer(data);
       }
-      navigate('/customers');
+      navigate(backPath);
     } catch (err: any) {
-      console.error('Failed to save customer:', err);
       setErrorMessage(
         err?.response?.data?.message ||
           (isEditMode ? 'Failed to update customer.' : 'Failed to create customer.')
@@ -109,7 +109,7 @@ export const AddCustomerPage: FC = () => {
 
   return (
     <div className='min-h-screen md:min-h-0 bg-white md:bg-transparent flex flex-col'>
-      <SubpageHeader title={pageTitle} backPath='/customers' className='block md:hidden sticky top-0 z-30' />
+      <SubpageHeader title={pageTitle} backPath={backPath} className='block md:hidden sticky top-0 z-30' />
 
       <div className='flex-1 w-full mx-auto px-4 py-2'>
         <div className='hidden md:flex items-center justify-between mb-5'>
