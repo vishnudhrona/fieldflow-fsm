@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
-import { Customer, type CustomerAttributes } from '../models/customer';
-import { Asset } from '../models/asset';
+import { Customer, Asset, WorkOrder } from '../models';
+import type { CustomerAttributes } from '../models/customer';
 
 export const findCustomerByEmail = async (email: string) => {
   return await Customer.findOne({
@@ -34,6 +34,11 @@ export const findAllCustomers = async (search?: string) => {
         as: 'assets',
         attributes: ['id'],
       },
+      {
+        model: WorkOrder,
+        as: 'workOrders',
+        attributes: ['id', 'status'],
+      },
     ],
     order: [['created_at', 'DESC']],
   });
@@ -45,6 +50,10 @@ export const findCustomerById = async (id: string) => {
       {
         model: Asset,
         as: 'assets',
+      },
+      {
+        model: WorkOrder,
+        as: 'workOrders',
       },
     ],
     order: [[{ model: Asset, as: 'assets' }, 'created_at', 'DESC']],

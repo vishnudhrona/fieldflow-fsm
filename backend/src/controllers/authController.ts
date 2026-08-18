@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { findUserByEmail } from '../helpers/userQueries';
+import { findUserByEmail, findTechnicians } from '../helpers/userQueries';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
@@ -46,5 +46,14 @@ export const login = async (req: Request, res: Response): Promise<Response> => {
     });
   } catch (error) {
     return res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+};
+
+export const getTechnicians = async (_req: Request, res: Response): Promise<Response> => {
+  try {
+    const technicians = await findTechnicians();
+    return res.status(200).json({ technicians, total: technicians.length});
+  } catch (error: any) {
+    return res.status(500).json({status: false, message: 'Internal server error while fetching technicians', error: error?.message,});
   }
 };

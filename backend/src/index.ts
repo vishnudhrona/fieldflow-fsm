@@ -6,6 +6,7 @@ import customerRoutes from './routes/customerRoutes';
 import menuRoutes from './routes/menuRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import assetRoutes from './routes/assetRoutes';
+import workOrderRoutes from './routes/workOrderRoutes';
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/menus', menuRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/assets', assetRoutes);
+app.use('/api/work-orders', workOrderRoutes);
 
 app.get('/api/health/ready', async (req: Request, res: Response) => {
   try {
