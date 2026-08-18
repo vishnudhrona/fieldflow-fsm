@@ -1,8 +1,12 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { UserRole } from '../../services/authService';
 
 export interface Column<T = any> {
   header: ReactNode;
   accessor?: keyof T | string | ((row: T) => ReactNode);
+  roles?: UserRole | UserRole[] | string | string[];
+  hidden?: boolean | (() => boolean);
   cell?: (row: T, index: number) => ReactNode;
   render?: (row: T, index: number) => ReactNode;
   key?: string;
@@ -39,6 +43,20 @@ export function Table<T = any>({
   striped = false,
   hoverable = true,
 }: TableProps<T>) {
+  const { hasRole } = useAuth();
+
+  const visibleColumns = useMemo(() => {
+    return columns.filter((col) => {
+      if (col.hidden === true || (typeof col.hidden === 'function' && col.hidden())) {
+        return false;
+      }
+      if (col.roles && !hasRole(col.roles)) {
+        return false;
+      }
+      return true;
+    });
+  }, [columns, hasRole]);
+
   const getAlignmentClass = (align?: 'left' | 'center' | 'right') => {
     switch (align) {
       case 'center':
@@ -94,7 +112,7 @@ export function Table<T = any>({
         <table className='w-full border-collapse text-left text-xs'>
           <thead className={`bg-slate-50/80 border-b border-slate-200 select-none ${headerClassName}`}>
             <tr>
-              {columns.map((col, colIdx) => (
+              {visibleColumns.map((col, colIdx) => (
                 <th
                   key={getColumnKey(col, colIdx)}
                   style={col.width ? { width: col.width } : undefined}
@@ -113,7 +131,7 @@ export function Table<T = any>({
           <tbody className='divide-y divide-slate-100'>
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length} className='px-4 py-12 text-center'>
+                <td colSpan={visibleColumns.length} className='px-4 py-12 text-center'>
                   <div className='flex flex-col items-center justify-center gap-2.5'>
                     <div className='w-6 h-6 border-2 border-[#D12026] border-t-transparent rounded-full animate-spin' />
                     <span className='text-xs font-semibold text-slate-400'>Loading data...</span>
@@ -122,7 +140,7 @@ export function Table<T = any>({
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className='px-4 py-12 text-center'>
+                <td colSpan={visibleColumns.length} className='px-4 py-12 text-center'>
                   {emptyState || (
                     <div className='flex flex-col items-center justify-center text-slate-400 py-4'>
                       <p className='text-xs font-medium'>No records found</p>
@@ -148,7 +166,7 @@ export function Table<T = any>({
                       ${customRowClass}
                     `}
                   >
-                    {columns.map((col, colIdx) => (
+                    {visibleColumns.map((col, colIdx) => (
                       <td
                         key={`${rowKey}-${getColumnKey(col, colIdx)}`}
                         className={`

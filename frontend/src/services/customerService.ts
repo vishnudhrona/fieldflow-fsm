@@ -35,6 +35,8 @@ export interface CustomerResponse {
   notes?: string | null;
   status: boolean;
   assets?: Asset[];
+  workOrders?: { id: string; status: string }[];
+  activeOrders?: number;
   createdAt: string;
   updatedAt: string;
 }

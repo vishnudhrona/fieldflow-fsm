@@ -10,6 +10,7 @@ import { AddCustomerPage } from './pages/AddCustomerPage';
 import { CustomerDetailsPage } from './pages/CustomerDetailsPage';
 import { AddAssetPage } from './pages/AddAssetPage';
 import { WorkOrdersPage } from './pages/WorkOrdersPage';
+import { CreateWorkOrderPage } from './pages/CreateWorkOrderPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProtectedRoute } from './components/auth';
 import { UserRole } from './services/authService';
@@ -47,6 +48,8 @@ const AppRoutes: FC = () => {
           <Route path='/customers/edit/:id' element={<AddCustomerPage />} />
           <Route path='/customers/:customerId/assets/add' element={<AddAssetPage />} />
           <Route path='/customers/:customerId/assets/edit/:id' element={<AddAssetPage />} />
+          <Route path='/work-orders/add' element={<CreateWorkOrderPage />} />
+          <Route path='/work-orders/edit/:id' element={<CreateWorkOrderPage />} />
         </Route>
 
         <Route path='*' element={<NotFoundPage />} />

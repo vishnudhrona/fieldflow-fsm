@@ -258,7 +258,9 @@ export const AssetDetails: FC<AssetDetailsProps> = ({ customerId, assets }) => {
             title='No active jobs'
             description='There are no active jobs or work orders currently assigned for this customer.'
             actionText='+ Create Job'
-            onAction={() => navigate('/work-orders')}
+            onAction={() =>
+              navigate(customerId ? `/work-orders/add?customerId=${customerId}` : '/work-orders/add')
+            }
           />
         </div>
       )}

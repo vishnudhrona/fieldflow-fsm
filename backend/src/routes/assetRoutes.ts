@@ -5,11 +5,12 @@ import { ROLES } from '../config/constants';
 
 const router = Router();
 
-router.use(authenticateJWT, authorizeRoles(ROLES.ADMIN_DISPATCHER));
+router.use(authenticateJWT);
 
-router.post('/', createAsset);
 router.get('/:id', getAssetById);
-router.put('/:id', updateAsset);
-router.delete('/:id', deleteAsset);
+
+router.post('/', authorizeRoles(ROLES.ADMIN_DISPATCHER), createAsset);
+router.put('/:id', authorizeRoles(ROLES.ADMIN_DISPATCHER), updateAsset);
+router.delete('/:id', authorizeRoles(ROLES.ADMIN_DISPATCHER), deleteAsset);
 
 export default router;
