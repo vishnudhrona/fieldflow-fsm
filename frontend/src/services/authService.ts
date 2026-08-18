@@ -31,6 +31,14 @@ export interface AuthResponse {
   message?: string;
 }
 
+export interface TechnicianUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  role: UserRole | string;
+}
+
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>('/auth/login', credentials);
@@ -50,7 +58,14 @@ export const authService = {
   
   isAuthenticated(): boolean {
     return !!localStorage.getItem('auth_token');
+  },
+
+  async getTechnicians(): Promise<TechnicianUser[]> {
+    const response = await api.get<{ technicians: TechnicianUser[]; total: number }>('/auth/technicians');
+    return response.data.technicians;
   }
 };
+
+export const getTechnicians = authService.getTechnicians;
 
 export default authService;

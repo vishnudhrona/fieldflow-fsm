@@ -154,14 +154,14 @@ export const AddAssetPage: FC = () => {
   }
 
   return (
-    <div className='min-h-screen md:min-h-0 bg-white md:bg-transparent flex flex-col'>
+    <div className='min-h-screen md:min-h-0 bg-white md:bg-transparent flex flex-col pb-14 md:pb-2'>
       <SubpageHeader
         title={pageTitle}
         backPath={targetCustomerId ? `/customers/${targetCustomerId}` : '/customers'}
         className='block md:hidden sticky top-0 z-30'
       />
 
-      <div className='flex-1 w-full mx-auto px-4 py-2'>
+      <div className='flex-1 w-full mx-auto px-4 py-2 pb-2'>
         <div className='hidden md:flex items-center justify-between mb-5'>
           <div>
             <h1 className='text-xl font-black text-slate-900 tracking-tight'>{pageTitle}</h1>

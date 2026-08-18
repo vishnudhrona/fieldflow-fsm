@@ -4,6 +4,15 @@ export type { ButtonProps } from './Button';
 export { Input } from './Input';
 export type { InputProps } from './Input';
 
+export { SearchBar } from './SearchBar';
+export type { SearchBarProps } from './SearchBar';
+
+export { Select } from './Select';
+export type { SelectProps, SelectOption } from './Select';
+
+export { PrioritySelector, DEFAULT_PRIORITY_OPTIONS } from './PrioritySelector';
+export type { PrioritySelectorProps, PriorityOption, PriorityLevel } from './PrioritySelector';
+
 export { Textarea } from './Textarea';
 export type { TextareaProps } from './Textarea';
 

@@ -156,12 +156,6 @@ export const Sidebar: FC<SidebarProps> = ({
                       {renderIcon(item, active)}
 
                       {!isCollapsed && <span className='flex-1 truncate tracking-tight'>{item.label}</span>}
-
-                      {!isCollapsed && item.badge !== undefined && (
-                        <span className='px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-[#D12026]'>
-                          {item.badge}
-                        </span>
-                      )}
                     </button>
                   </li>
                 );

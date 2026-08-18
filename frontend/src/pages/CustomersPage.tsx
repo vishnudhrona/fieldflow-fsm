@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, type FC } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, UserPlus, Edit, UserX, UserCheck } from 'lucide-react';
-import { Table, TableActionMenu, Button, Input, StatusBadge, EntityCard, type Column } from '../components/ui';
+import { UserPlus, Edit, UserX, UserCheck } from 'lucide-react';
+import { Table, TableActionMenu, Button, SearchBar, StatusBadge, EntityCard, EmptyState, type Column } from '../components/ui';
 import { mapObjectValues } from '../utils';
 import { CUSTOMER_COLUMNS } from '../constants';
 import { useDebounce } from '../hooks';
@@ -15,7 +15,8 @@ export const CustomersPage: FC = () => {
 
   const fetchCustomers = async (searchQuery?: string) => {
     try {
-      const data = await getCustomers(searchQuery);      
+      const data = await getCustomers(searchQuery);   
+      console.log(19,data);
       const mapped: Customer[] = data.map((c) => ({
         id: c.id,
         name: c.name,
@@ -23,14 +24,14 @@ export const CustomersPage: FC = () => {
         phone: c.phone,
         email: c.email,
         address: c.address,
-        notes: c.notes || undefined,
         status: c.status ? 'ACTIVE' : 'INACTIVE',
-        assetsCount: c.assets.length,
-        activeOrders: 0,
+        assetsCount: c.assets?.length ?? 0,
+        activeOrders: c.workOrders?.length ?? 0,
+        createdAt: c.createdAt || new Date().toISOString(),
       }));
       setCustomers(mapped);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to fetch customers. Please check your connection.');
+    } catch {
+      setCustomers([]);
     }
   };
 
@@ -40,12 +41,12 @@ export const CustomersPage: FC = () => {
 
   const handleToggleStatus = async (customer: Customer) => {
     const previousStatus = customer.status;
-    const nextStatusBool = previousStatus !== 'ACTIVE';
-    const nextStatusText = nextStatusBool ? 'ACTIVE' : 'INACTIVE';
-    setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, status: nextStatusText } : c)));
+    const nextStatus = previousStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+
+    setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, status: nextStatus } : c)));
 
     try {
-      await updateCustomer(customer.id, { status: nextStatusBool });
+      await updateCustomer(customer.id, { status: nextStatus === 'ACTIVE' });
     } catch (err: any) {
       setCustomers((prev) => prev.map((c) => (c.id === customer.id ? { ...c, status: previousStatus } : c)));
       alert(err?.response?.data?.message || 'Failed to update customer status. Please try again.');
@@ -108,32 +109,50 @@ export const CustomersPage: FC = () => {
         </Button>
       </div>
 
-      <Input
+      <SearchBar
         value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
+        onChange={setSearchTerm}
         placeholder='Search customer, contact person, phone, or location...'
-        leftIcon={<Search className='w-4 h-4 text-slate-400' />}
-        className='py-2.5 rounded-2xl border-slate-200 shadow-xs'
       />
 
-      <div className='block md:hidden space-y-3'>
-        {customers?.map((customer) => (
-          <EntityCard
-            key={customer?.id}
-            title={customer?.name}
-            subtitle={customer?.phone}
-            location={customer?.address}
-            statusBadgeValue={customer?.status === 'ACTIVE'}
-            leftStat={`${customer?.assetsCount ?? 0} Assets`}
-            rightStat={`${customer?.activeOrders ?? 0} Active Jobs`}
-            onClick={() => navigate(`/customers/${customer.id}`)}
-          />
-        ))}
-      </div>
+      {customers.length === 0 ? (
+        <EmptyState
+          title='No customers found'
+          description={
+            searchTerm
+              ? 'No client accounts match your search query.'
+              : 'Add your first customer account to get started.'
+          }
+          actionText='+ Add Client'
+          onAction={() => navigate('/customers/add')}
+        />
+      ) : (
+        <>
+          <div className='block md:hidden space-y-3'>
+            {customers.map((customer) => (
+              <EntityCard
+                key={customer.id}
+                title={customer.name}
+                subtitle={customer.phone}
+                location={customer.address}
+                statusBadgeValue={customer.status === 'ACTIVE'}
+                leftStat={`${customer.assetsCount ?? 0} Assets`}
+                rightStat={`${customer.activeOrders ?? 0} Active Jobs`}
+                onClick={() => navigate(`/customers/${customer.id}`)}
+              />
+            ))}
+          </div>
 
-      <div className='hidden md:block'>
-        <Table columns={columns} data={customers} onRowClick={(customer) => navigate(`/customers/${customer.id}`)} />
-      </div>
+          <div className='hidden md:block'>
+            <Table
+              columns={columns}
+              data={customers}
+              onRowClick={(customer) => navigate(`/customers/${customer.id}`)}
+              hoverable
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 };

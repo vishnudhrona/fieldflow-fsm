@@ -3,13 +3,18 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { NetworkSimulator } from '../NetworkSimulator';
 import { getRoleLabel } from '../../services/authService';
+import { LogOut } from 'lucide-react';
 
 export interface MobileNavProps {
   className?: string;
 }
 
 export const MobileNav: FC<MobileNavProps> = ({ className = '' }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+
+  const handleLogoutClick = () => {
+    logout();
+  };
 
   return (
     <header
@@ -45,6 +50,7 @@ export const MobileNav: FC<MobileNavProps> = ({ className = '' }) => {
 
       <div className='flex items-center gap-2'>
         <NetworkSimulator />
+        <LogOut className='w-4 h-4 text-rose-600 cursor-pointer' onClick={handleLogoutClick} />
       </div>
     </header>
   );

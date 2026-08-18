@@ -1,12 +1,20 @@
-import { createContext, useContext, useState, type ReactNode, type FC } from 'react';
-import { authService, type LoginCredentials, type AuthResponse } from '../services/authService';
+import { createContext, useContext, useState, useMemo, type ReactNode, type FC } from 'react';
+import {
+  authService,
+  UserRole,
+  type LoginCredentials,
+  type AuthResponse,
+} from '../services/authService';
 
-interface AuthContextType {
+export interface AuthContextType {
   user: AuthResponse['user'] | null;
   login: (credentials: LoginCredentials) => Promise<AuthResponse['user'] | undefined>;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isAdmin: boolean;
+  isTechnician: boolean;
+  hasRole: (roles: UserRole | UserRole[] | string | string[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -47,12 +55,30 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   };
 
   const isAuthenticated = Boolean(user);
+  const isAdmin = user?.role === UserRole.ADMIN_DISPATCHER;
+  const isTechnician = user?.role === UserRole.TECHNICIAN;
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated, isLoading }}>
-      {children}
-    </AuthContext.Provider>
+  const hasRole = (roles: UserRole | UserRole[] | string | string[]): boolean => {
+    if (!user || !user.role) return false;
+    const roleList = Array.isArray(roles) ? roles : [roles];
+    return roleList.includes(user.role as UserRole);
+  };
+
+  const contextValue = useMemo(
+    () => ({
+      user,
+      login,
+      logout,
+      isAuthenticated,
+      isLoading,
+      isAdmin,
+      isTechnician,
+      hasRole,
+    }),
+    [user, isLoading, isAuthenticated, isAdmin, isTechnician]
   );
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = (): AuthContextType => {
