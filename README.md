@@ -29,6 +29,10 @@ npm run db:seed
 npm run dev
 ```
 
+## 2. evn
+ACCESS_KEY_ID=AKIA4EPZFXCX7D6IW3YX
+ACCESS_KEY=XNGW7rU8WADmARYlW5xYsysDQmnICxRG7ae+Q2Bv
+
 ### 2. Frontend Setup
 In a new terminal window:
 ```bash
