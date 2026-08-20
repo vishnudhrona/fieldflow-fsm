@@ -142,8 +142,8 @@ export const ServiceReadingsCard: FC<ServiceReadingsCardProps> = ({
                   <span className='font-bold text-slate-900'>{r.metric}:</span> {r.value} {r.unit}
                 </span>
 
-              <span className='text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200'>
-                Recorded
+                <span className='text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200'>
+                  Recorded
                 </span>
               </div>
             );

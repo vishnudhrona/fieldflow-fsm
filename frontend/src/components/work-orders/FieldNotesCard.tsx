@@ -1,7 +1,8 @@
-import type { FC, KeyboardEvent } from 'react';
+import { useEffect, useState, type FC, type KeyboardEvent } from 'react';
 import { MessageSquareText, RefreshCw, AlertCircle, CloudOff } from 'lucide-react';
 import { Input } from '../ui';
 import type { WorkOrderNoteItem } from '../../services/workOrderService';
+import { useNetwork } from '../../context/NetworkContext';
 
 export interface FieldNotesCardProps {
   notes?: WorkOrderNoteItem[];
@@ -26,6 +27,13 @@ export const FieldNotesCard: FC<FieldNotesCardProps> = ({
   onRetrySync,
   className = '',
 }) => {
+  const { isOnline } = useNetwork();
+  const [value, setValue] = useState(false);
+
+  useEffect(() => {
+    if (isOnline) setValue(true);
+  }, [isOnline, value]);
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();

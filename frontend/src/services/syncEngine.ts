@@ -107,11 +107,8 @@ export class SyncEngine {
     }
 
     try {
-      const outboxCount = await localDb.outbox.count();
-
-      if (outboxCount > 0) {
-        await this.processOutbox();
-      }
+      // Background outbox sync (non-blocking for fast page load)
+      this.processOutbox().catch(() => {});
 
       const response = await api.get<{ workOrder: WorkOrder }>(`/work-orders/${id}`);
       const order = response.data.workOrder;
@@ -178,6 +175,7 @@ export class SyncEngine {
         createdAt: new Date().toISOString(),
       };
       existingWo.notes = [noteItem, ...(existingWo.notes || [])];
+      existingWo._syncStatus = 'PENDING_SYNC';
       await localDb.workOrders.put(existingWo);
     }
 
@@ -236,6 +234,7 @@ export class SyncEngine {
         createdAt: new Date().toISOString(),
       };
       existingWo.readings = [readingItem, ...(existingWo.readings || [])];
+      existingWo._syncStatus = 'PENDING_SYNC';
       await localDb.workOrders.put(existingWo);
     }
 

@@ -7,8 +7,8 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
-      - DATABASE_URL=postgresql://neondb_owner:npg_bQup2wPknLr5@ep-lucky-fire-az3zh6v1-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
-      - JWT_SECRET=94e2c64dc9142c8e49faaa673add2d9b23911638de4b2b7dfcc770c7f3420b03
+      - DATABASE_URL=${postgresql://neondb_owner:npg_DJ0blQLYvCI8@ep-fancy-block-ayc7gq2d-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require}
+      - JWT_SECRET=${94e2c64dc9142c8e49faaa673add2d9b23911638de4b2b7dfcc770c7f3420b03}
       - NODE_ENV=production
     restart: always
 

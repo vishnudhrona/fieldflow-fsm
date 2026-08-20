@@ -43,7 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 Something went wrong
               </h2>
               <p className='text-xs text-slate-500 leading-relaxed'>
-                An unexpected application error occurred. Your offline changes in local storage remain safely preserved.
+                An unexpected application error occurred. Your offline changes in IndexedDB storage remain safely preserved.
               </p>
             </div>
 
