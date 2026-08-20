@@ -1,10 +1,12 @@
 import { useState, useRef, type FC } from 'react';
-import { Database, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useStorageQuota, useClickOutside } from '../../hooks';
-import { getRoleLabel } from '../../services/authService';
-import { ProfileDropdown } from '../auth';
+import { useClickOutside } from '../../hooks';
+import { getRoleLabel, UserRole } from '../../services/authService';
+import { Can, ProfileDropdown } from '../auth';
+import { OutboxButton } from '../outbox';
 import NetworkSimulator from '../NetworkSimulator';
+import { StorageIndicator } from '../ui';
 
 export interface DesktopNavProps {
   storageUsageText?: string;
@@ -12,20 +14,13 @@ export interface DesktopNavProps {
 
 export const DesktopNav: FC<DesktopNavProps> = ({ storageUsageText }) => {
   const { user } = useAuth();
-  const storage = useStorageQuota();
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   useClickOutside(profileDropdownRef, () => setIsProfileOpen(false), isProfileOpen);
 
-  const displayStorage =
-    storageUsageText ||
-    (storage.quota > 0
-      ? `${Math.round(storage.percentUsed || 72)}% of ${storage.quotaFormatted || '2GB'} used`
-      : '72% of 2GB used');
-
-  const displayName = user?.name;
+  const displayName = user?.name || 'User';
   const displayRole = getRoleLabel(user?.role);
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -35,14 +30,12 @@ export const DesktopNav: FC<DesktopNavProps> = ({ storageUsageText }) => {
         px-4 lg:px-6 py-2.5 gap-4
         shadow-[0_1px_3px_rgba(0,0,0,0.03)]'
     >
-
       <div className='flex items-center gap-2.5 lg:gap-3.5 shrink-0'>
-        <NetworkSimulator />
-
-        <div className='hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-2xs'>
-          <Database className='w-3.5 h-3.5 text-slate-500' />
-          <span>{displayStorage}</span>
-        </div>
+        <Can roles={UserRole.TECHNICIAN}>
+          <NetworkSimulator />
+          <OutboxButton />
+          <StorageIndicator customLabel={storageUsageText} />
+        </Can>
 
         <div className='h-6 w-px bg-slate-200' />
 

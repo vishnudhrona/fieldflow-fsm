@@ -1,47 +1,96 @@
-# FieldFlow: Offline-First Field Service Management (FSM)
+# 🛠️ Offline-First Field Service Management Application
 
-FieldFlow is a production-grade, offline-first Field Service Management platform built using a unified monorepo architecture. 
+A robust, enterprise-grade **Offline-First Field Service Management (FSM) Web Application** built with **React, TypeScript, Dexie.js (IndexedDB), Node.js, Express, and PostgreSQL (Sequelize ORM)**.
 
-It provides seamless workflows for central dispatchers and field technicians, featuring robust client-side storage, background synchronization, and conflict resolution.
+Designed specifically for field service companies whose technicians operate in environments with zero or spotty Internet connectivity. Technicians can perform complete work order lifecycles (completing checklists, recording readings, adding field notes, and capturing offline camera photos), while an automated, background **Outbox Sync Engine** ensures seamless, conflict-aware synchronization upon reconnection.
 
-## 📁 Repository Structure
+---
 
-*   `backend/` - Node.js Express server written in TypeScript, using Sequelize ORM with PostgreSQL.
-*   `frontend/` - React Progressive Web App (PWA) built with Vite, TypeScript, and Tailwind CSS.
-*   `docker-compose.yml` - Docker Compose configuration to spin up the entire application stack locally.
+## 🚀 Quick Start Guide
 
-## 🚀 Local Setup
+### 📋 Prerequisites
+- **Node.js**: `v18.x` or higher
+- **PostgreSQL**: `v14.x` or higher (Running locally or via Docker)
+- **Package Manager**: `npm`
 
-### Prerequisites
-*   [Node.js](https://nodejs.org/) (v22+ recommended)
-*   [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for running via containerization)
+---
 
-### Option 1: Running with Docker Compose (Recommended)
-From the root directory, run:
+### 🔑 Demo Credentials
+
+| Role | Email | Password | Allowed Capabilities |
+| :--- | :--- | :--- | :--- |
+| **Admin / Dispatcher** | `admin@example.com` | `admin123` | Create & manage customers/assets; dispatch work orders; cancel jobs; view company-wide activity history. |
+| **Field Technician** | `tech@example.com` | `tech123` | View assigned jobs; execute checklists & readings offline; attach offline photos; complete jobs; manage outbox sync queue. |
+
+> 💡 **Tip**: The login screen (`/login`) includes **1-Click Quick Demo Autofill** buttons to instantly test both roles.
+
+---
+
+## 💻 Local Setup & Execution
+
+### 1. Database Setup
+Create a PostgreSQL database named `fsm_db`:
 ```bash
-docker compose up --build
+createdb -U postgres fsm_db
 ```
-This builds both services and runs them.
-*   Frontend: `http://localhost:80`
-*   Backend: `http://localhost:8080`
 
-### Option 2: Running Individually
-
-#### 1. Start the Backend
+### 2. Backend Setup
 ```bash
 cd backend
 npm install
+
+# Run database migrations & populate seed data
+npx sequelize-cli db:migrate
+npx sequelize-cli db:seed:all
+
+# Start backend server in development mode (Runs on http://localhost:8080)
 npm run dev
 ```
 
-#### 2. Start the Frontend
+### 3. Frontend Setup
+In a new terminal window:
 ```bash
 cd frontend
 npm install
+
+# Start Vite frontend dev server (Runs on http://localhost:5173)
 npm run dev
 ```
 
-## 🛠 Tech Stack
-*   **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Workbox (PWA), IndexedDB (Dexie.js).
-*   **Backend:** Node.js, Express, TypeScript, Sequelize (PostgreSQL), dotenv.
-*   **Deployment & Ops:** Docker, Docker Compose.
+---
+
+## 🏗️ Architecture & Documentation Suite
+
+For comprehensive technical, architectural, and conflict-handling breakdowns, refer to our detailed documentation suite in [`/docs`](./docs):
+
+- 📐 **[System Architecture & Data Model (docs/ARCHITECTURE.md)](./docs/ARCHITECTURE.md)**: Architecture diagrams, Dexie IndexedDB schemas, Mermaid ER diagrams, and answers to the 10 core architecture questions.
+- ⚡ **[Conflict Resolution Strategy & Idempotency (docs/CONFLICT_RESOLUTION.md)](./docs/CONFLICT_RESOLUTION.md)**: Detailed breakdown of the `COMPLETED` vs `CANCELLED` conflict scenario and `X-Idempotency-Key` deduplication logic.
+- 📡 **[API Specification Reference (docs/API_SPECIFICATION.md)](./docs/API_SPECIFICATION.md)**: Full REST API endpoint reference and `/api/sync/batch` contract.
+
+---
+
+## 🧪 7 Live Demonstration Scenarios
+
+| # | Test Scenario | Resolution & Mechanism |
+| :-: | :--- | :--- |
+| **1** | **Online Work Order Lifecycle** | Admin dispatches job $\to$ Technician completes online with live updates. |
+| **2** | **Offline Persistence & Restart** | Technician goes offline, adds notes/photos/readings, closes & reopens browser $\to$ data survives in Dexie IndexedDB. |
+| **3** | **Automatic Outbox Sync** | Technician reconnects $\to$ `SyncContext` automatically pushes queued outbox items to `/api/sync/batch`. |
+| **4** | **COMPLETED vs CANCELLED Conflict** | Job completed offline while Dispatcher cancels online $\to$ backend detects version mismatch, flags as `CONFLICT`, and displays in Outbox Drawer without silent data loss. |
+| **5** | **Idempotent Retry Handling** | Sync request transmitted 3x due to network blips $\to$ backend checks `mutationId` / `X-Idempotency-Key` and processes exactly once. |
+| **6** | **Offline Photo Survival & Retry** | Offline camera capture stored as `Blob` in IndexedDB, queued in `photoSyncEngine`, retries automatically on failure. |
+| **7** | **Security & Role Authorization** | Technician attempts to access or modify unauthorized work orders $\to$ backend rejects with `403 Forbidden`. |
+
+---
+
+## 🐳 Docker Deployment (Optional)
+
+Run the full stack (Database + Backend + Frontend) using Docker Compose:
+```bash
+docker-compose up --build -d
+```
+
+---
+
+## 📄 License
+Developed for candidate technical assessment. All rights reserved.

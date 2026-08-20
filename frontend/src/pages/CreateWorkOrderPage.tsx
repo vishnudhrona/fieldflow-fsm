@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { Plus, Trash2, AlertCircle, Calendar, Clock, UserCheck, Wrench, Building2 } from 'lucide-react';
 import { Button, Input, Select, Textarea, PrioritySelector } from '../components/ui';
 import { SubpageHeader } from '../components/navigation';
-import { getCustomers, getCustomerById, type Customer } from '../services/customerService';
+import { getCustomers, getCustomerById, type CustomerResponse } from '../services/customerService';
 import { getTechnicians, type TechnicianUser } from '../services/authService';
 import {
   createWorkOrder,
@@ -39,7 +39,7 @@ export const CreateWorkOrderPage: FC = () => {
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [technicians, setTechnicians] = useState<TechnicianUser[]>([]);
 
@@ -291,7 +291,7 @@ export const CreateWorkOrderPage: FC = () => {
                               value: a.id,
                               label: a.machineName,
                               subLabel: `${a.machineType} • ${a.modelName || 'General'} ${a.serialNumber ? `• SN: ${a.serialNumber}` : ''}`,
-                              image: a.imageUrl,
+                              image: a.imageUrl || undefined,
                               icon: !a.imageUrl ? <Wrench className='w-4 h-4 text-slate-500' /> : undefined,
                             }))
                           : [{ value: '', label: selectedCustomerId ? 'No equipment registered' : 'Select a customer first' }]

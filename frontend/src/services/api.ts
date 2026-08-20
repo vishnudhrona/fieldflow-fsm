@@ -18,6 +18,10 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    if (config.data instanceof FormData && config.headers) {
+      delete config.headers['Content-Type'];
+    }
+
     const simulatedNetwork = localStorage.getItem('fsm_simulated_network');
     if (simulatedNetwork === 'OFFLINE') {
       return Promise.reject(new Error('Network error: Device is currently in OFFLINE mode.'));

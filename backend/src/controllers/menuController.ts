@@ -9,9 +9,7 @@ export const getMenus = async (req: AuthenticatedRequest, res: Response): Promis
 
     const menus = userRole
       ? allMenus.filter((menu) => {
-          const roles = Array.isArray(menu.allowedRoles)
-            ? menu.allowedRoles
-            : [];
+          const roles = Array.isArray(menu.allowedRoles) ? menu.allowedRoles : [];
           return roles.includes(userRole);
         })
       : allMenus;

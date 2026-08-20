@@ -140,15 +140,6 @@ export const BottomNav: FC<BottomNavProps> = ({
                 >
                   <div className='relative flex items-center justify-center'>
                     {renderIcon(item, isActive)}
-
-                    {item.badge !== undefined && item.badge !== null && item.badge !== '' && (
-                      <span
-                        style={{ backgroundColor: item.badgeColor || activeColor }}
-                        className='absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-extrabold text-white flex items-center justify-center shadow-xs ring-1 ring-white'
-                      >
-                        {item.badge}
-                      </span>
-                    )}
                   </div>
 
                   {showLabels && (

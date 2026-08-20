@@ -5,6 +5,7 @@ export interface TabItem<T extends string = string> {
   label: ReactNode;
   count?: number | string;
   disabled?: boolean;
+  className?: string;
 }
 
 export interface TabsProps<T extends string = string> {
@@ -48,6 +49,7 @@ export const Tabs = <T extends string = string>({
               ${fullWidth ? 'flex-1 text-center' : ''}
               ${isActive ? 'text-[#D12026]' : 'text-slate-500 hover:text-slate-800'}
               ${tab.disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
+              ${tab.className ? tab.className : ''}
               ${tabClassName}
             `}
           >

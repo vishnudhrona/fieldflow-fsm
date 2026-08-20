@@ -7,6 +7,10 @@ import MenuModelInit from './menu';
 import AssetModelInit from './asset';
 import WorkOrderModelInit from './workOrder';
 import WorkOrderChecklistModelInit from './workOrderChecklist';
+import WorkOrderAttachmentModelInit from './workOrderAttachment';
+import WorkOrderNoteModelInit from './workOrderNote';
+import WorkOrderHistoryModelInit from './workOrderHistory';
+import WorkOrderReadingModelInit from './workOrderReading';
 
 dotenv.config();
 
@@ -30,8 +34,11 @@ const Menu = MenuModelInit(sequelize, DataTypes);
 const Asset = AssetModelInit(sequelize, DataTypes);
 const WorkOrder = WorkOrderModelInit(sequelize, DataTypes);
 const WorkOrderChecklist = WorkOrderChecklistModelInit(sequelize, DataTypes);
+const WorkOrderAttachment = WorkOrderAttachmentModelInit(sequelize, DataTypes);
+const WorkOrderNote = WorkOrderNoteModelInit(sequelize, DataTypes);
+const WorkOrderHistory = WorkOrderHistoryModelInit(sequelize, DataTypes);
+const WorkOrderReading = WorkOrderReadingModelInit(sequelize, DataTypes);
 
-// Associations
 Customer.hasMany(Asset, { foreignKey: 'customerId', as: 'assets', onDelete: 'SET NULL' });
 Asset.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' });
 
@@ -47,6 +54,30 @@ WorkOrder.belongsTo(User, { foreignKey: 'technicianId', as: 'technician' });
 WorkOrder.hasMany(WorkOrderChecklist, { foreignKey: 'workOrderId', as: 'checklistItems', onDelete: 'CASCADE' });
 WorkOrderChecklist.belongsTo(WorkOrder, { foreignKey: 'workOrderId', as: 'workOrder' });
 
+WorkOrder.hasMany(WorkOrderAttachment, { foreignKey: 'workOrderId', as: 'attachments', onDelete: 'CASCADE' });
+WorkOrderAttachment.belongsTo(WorkOrder, { foreignKey: 'workOrderId', as: 'workOrder' });
+
+User.hasMany(WorkOrderAttachment, { foreignKey: 'technicianId', as: 'uploadedAttachments', onDelete: 'SET NULL' });
+WorkOrderAttachment.belongsTo(User, { foreignKey: 'technicianId', as: 'technician' });
+
+WorkOrder.hasMany(WorkOrderNote, { foreignKey: 'workOrderId', as: 'notes', onDelete: 'CASCADE' });
+WorkOrderNote.belongsTo(WorkOrder, { foreignKey: 'workOrderId', as: 'workOrder' });
+
+User.hasMany(WorkOrderNote, { foreignKey: 'userId', as: 'notes', onDelete: 'CASCADE' });
+WorkOrderNote.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+WorkOrder.hasMany(WorkOrderHistory, { foreignKey: 'workOrderId', as: 'history', onDelete: 'CASCADE' });
+WorkOrderHistory.belongsTo(WorkOrder, { foreignKey: 'workOrderId', as: 'workOrder' });
+
+User.hasMany(WorkOrderHistory, { foreignKey: 'userId', as: 'historyLogs', onDelete: 'SET NULL' });
+WorkOrderHistory.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+WorkOrder.hasMany(WorkOrderReading, { foreignKey: 'workOrderId', as: 'readings', onDelete: 'CASCADE' });
+WorkOrderReading.belongsTo(WorkOrder, { foreignKey: 'workOrderId', as: 'workOrder' });
+
+User.hasMany(WorkOrderReading, { foreignKey: 'userId', as: 'readings', onDelete: 'SET NULL' });
+WorkOrderReading.belongsTo(User, { foreignKey: 'userId', as: 'technician' });
+
 const db = {
   sequelize,
   Sequelize,
@@ -56,7 +87,24 @@ const db = {
   Asset,
   WorkOrder,
   WorkOrderChecklist,
+  WorkOrderAttachment,
+  WorkOrderNote,
+  WorkOrderHistory,
+  WorkOrderReading,
 };
 
-export { sequelize, Sequelize, User, Customer, Menu, Asset, WorkOrder, WorkOrderChecklist };
+export {
+  sequelize,
+  Sequelize,
+  User,
+  Customer,
+  Menu,
+  Asset,
+  WorkOrder,
+  WorkOrderChecklist,
+  WorkOrderAttachment,
+  WorkOrderNote,
+  WorkOrderHistory,
+  WorkOrderReading,
+};
 export default db;

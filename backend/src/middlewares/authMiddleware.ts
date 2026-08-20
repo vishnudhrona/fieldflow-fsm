@@ -6,6 +6,7 @@ export interface DecodedUser {
   id: string;
   email: string;
   role: Role;
+  name?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
