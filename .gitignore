@@ -3,8 +3,7 @@
 **/dist/
 **/dev-dist/
 
-# Env files (contains sensitive credentials)
-**/.env
+# Env files
 **/.env*.local
 
 # System Files
