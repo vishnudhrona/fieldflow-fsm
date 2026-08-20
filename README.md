@@ -1,11 +1,3 @@
-# 🛠️ Offline-First Field Service Management Application
-
-A robust, enterprise-grade **Offline-First Field Service Management (FSM) Web Application** built with **React, TypeScript, Dexie.js (IndexedDB), Node.js, Express, and PostgreSQL (Sequelize ORM)**.
-
-Designed specifically for field service companies whose technicians operate in environments with zero or spotty Internet connectivity. Technicians can perform complete work order lifecycles (completing checklists, recording readings, adding field notes, and capturing offline camera photos), while an automated, background **Outbox Sync Engine** ensures seamless, conflict-aware synchronization upon reconnection.
-
----
-
 ## 🚀 Quick Start Guide
 
 ### 📋 Prerequisites
@@ -28,32 +20,20 @@ Designed specifically for field service companies whose technicians operate in e
 
 ## 💻 Local Setup & Execution
 
-### 1. Database Setup
-Create a PostgreSQL database named `fsm_db`:
-```bash
-createdb -U postgres fsm_db
-```
-
-### 2. Backend Setup
+### 1. Backend Setup
 ```bash
 cd backend
 npm install
-
-# Run database migrations & populate seed data
-npx sequelize-cli db:migrate
-npx sequelize-cli db:seed:all
-
-# Start backend server in development mode (Runs on http://localhost:8080)
+npm run db:migrate
+npm run db:seed
 npm run dev
 ```
 
-### 3. Frontend Setup
+### 2. Frontend Setup
 In a new terminal window:
 ```bash
 cd frontend
 npm install
-
-# Start Vite frontend dev server (Runs on http://localhost:5173)
 npm run dev
 ```
 
@@ -80,17 +60,3 @@ For comprehensive technical, architectural, and conflict-handling breakdowns, re
 | **5** | **Idempotent Retry Handling** | Sync request transmitted 3x due to network blips $\to$ backend checks `mutationId` / `X-Idempotency-Key` and processes exactly once. |
 | **6** | **Offline Photo Survival & Retry** | Offline camera capture stored as `Blob` in IndexedDB, queued in `photoSyncEngine`, retries automatically on failure. |
 | **7** | **Security & Role Authorization** | Technician attempts to access or modify unauthorized work orders $\to$ backend rejects with `403 Forbidden`. |
-
----
-
-## 🐳 Docker Deployment (Optional)
-
-Run the full stack (Database + Backend + Frontend) using Docker Compose:
-```bash
-docker-compose up --build -d
-```
-
----
-
-## 📄 License
-Developed for candidate technical assessment. All rights reserved.

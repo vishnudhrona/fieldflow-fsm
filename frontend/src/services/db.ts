@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { WorkOrder, WorkOrderChecklistItem } from './workOrderService';
+import type { WorkOrder } from './workOrderService';
 
 export type MutationActionType = 'UPDATE_STATUS' | 'COMPLETE_JOB' | 'UPDATE_CHECKLIST' | 'ADD_NOTE' | 'ADD_READING';
 
@@ -75,23 +75,15 @@ export interface AuditTrailItem {
 
 export class FieldFlowDatabase extends Dexie {
   workOrders!: Table<LocalWorkOrder, string>;
-  checklists!: Table<WorkOrderChecklistItem, string>;
-  readings!: Table<ServiceReading, string>;
   attachments!: Table<WorkOrderAttachment, string>;
-  fieldNotes!: Table<FieldNoteItem, string>;
-  auditLogs!: Table<AuditTrailItem, string>;
   outbox!: Table<OutboxMutation, string>;
   syncMeta!: Table<{ key: string; value: any }, string>;
 
   constructor() {
     super('fieldflow_fsm_db');
-    this.version(3).stores({
+    this.version(4).stores({
       workOrders: 'id, orderNumber, status, scheduledDate, _syncStatus',
-      checklists: 'id, workOrderId, isCompleted, orderIndex',
-      readings: 'id, workOrderId, timestamp',
       attachments: 'id, workOrderId, status, createdAt, timestamp',
-      fieldNotes: 'id, workOrderId, timestamp',
-      auditLogs: 'id, workOrderId, timestamp',
       outbox: 'mutationId, workOrderId, actionType, status, timestamp',
       syncMeta: 'key',
     });
@@ -100,4 +92,3 @@ export class FieldFlowDatabase extends Dexie {
 
 export const localDb = new FieldFlowDatabase();
 export const db = localDb;
-

@@ -147,3 +147,93 @@ Uploads a binary photo attachment captured offline.
     }
   }
   ```
+
+---
+
+## 5. Customer Management Endpoints
+
+### `GET /api/customers`
+Retrieves all customer records (Requires `ADMIN_DISPATCHER` role).
+
+- **Headers**: `Authorization: Bearer <token>`
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "customers": [
+      {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "name": "Acme Industrial Systems",
+        "contactPerson": "Robert Sterling",
+        "email": "contact@acmeindustrial.com",
+        "phone": "312-555-0143",
+        "address": "100 Industrial Pkwy, Chicago, IL"
+      }
+    ]
+  }
+  ```
+
+### `POST /api/customers`
+Creates a new customer record.
+
+- **Request Body**:
+  ```json
+  {
+    "name": "Apex Global Logistics",
+    "contactPerson": "Marcus Vance",
+    "email": "ops@apexlogistics.com",
+    "phone": "214-555-0812",
+    "address": "800 Freight Terminal Way, Dallas, TX"
+  }
+  ```
+
+### `GET /api/customers/:id`
+Fetches a single customer by ID along with their registered equipment assets.
+
+### `PUT /api/customers/:id`
+Updates an existing customer record.
+
+---
+
+## 6. Asset Management Endpoints
+
+### `GET /api/assets/:id`
+Retrieves detailed equipment asset information including model, serial number, equipment photos, and owning customer.
+
+- **Headers**: `Authorization: Bearer <token>`
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "asset": {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "machineName": "Industrial Chiller Unit A",
+      "machineType": "HVAC Cooling System",
+      "modelName": "Trane Centravac CVHE-800",
+      "serialNumber": "SN-CH-99412-X",
+      "imageUrl": "https://images.unsplash.com/photo-1581092160607-ee22621dd758",
+      "customer": { "name": "Acme Industrial Systems" }
+    }
+  }
+  ```
+
+### `POST /api/assets`
+Creates a new equipment asset for a customer (Requires `ADMIN_DISPATCHER` role).
+
+- **Request Body**:
+  ```json
+  {
+    "customerId": "10000000-0000-4000-8000-000000000001",
+    "machineName": "Emergency MRI Generator Array",
+    "machineType": "Medical Backup Power",
+    "modelName": "CAT 3516B Diesel Genset",
+    "serialNumber": "SN-GEN-33109-M",
+    "installationDate": "2023-01-20"
+  }
+  ```
+
+### `PUT /api/assets/:id`
+Updates equipment asset specification and image URLs.
+
+### `DELETE /api/assets/:id`
+Deletes or deactivates an equipment asset.

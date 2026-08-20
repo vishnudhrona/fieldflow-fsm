@@ -8,137 +8,146 @@ This document outlines the system architecture, offline persistence strategy, da
 
 ```mermaid
 graph TD
-    subgraph Browser ["Client Application (React + TypeScript)"]
-        UI["UI Layer (Pages & Components)"]
-        NetworkCtx["Network Context (Online / Offline Monitor)"]
-        SyncCtx["Sync Context (Reactive Engine)"]
-        
-        subgraph LocalDB ["IndexedDB (Dexie.js Engine)"]
-            WOStore["workOrders (Cached Jobs)"]
-            OutboxStore["outbox (Mutation Queue)"]
-            AttachStore["attachments (Offline Photo Blobs)"]
-            MetaStore["syncMeta (Metadata)"]
-        end
-
-        PhotoEngine["photoSyncEngine (Binary Upload Manager)"]
-        SyncEngine["syncEngine (JSON Outbox Manager)"]
+    subgraph Client ["Client Application (React + TS)"]
+        UI["React UI Components"]
+        NetMon["Network Monitor"]
     end
 
-    subgraph Server ["Backend Application (Node.js + Express)"]
-        AuthMiddleware["JWT & Role Auth Middleware"]
-        SyncController["Sync Controller (/api/sync/batch)"]
-        IdempotencyStore["Idempotency Key Check"]
-        WorkOrderRoutes["Work Order & Attachment Routes"]
+    subgraph IndexedDBStorage ["IndexedDB Offline Storage (Dexie.js)"]
+        WOCache["workOrders Store"]
+        OutboxQueue["outbox Mutation Queue"]
+        BlobStore["attachments Photo Blobs"]
+        SyncMetaStore["syncMeta Metadata Store"]
     end
 
-    subgraph Database ["Persistence Layer (PostgreSQL)"]
-        PGDB[("fsm_db (Relational DB)")]
-        DiskStorage["Local File Storage (/uploads)"]
+    subgraph SyncPath ["Synchronization Path"]
+        SyncEngine["syncEngine (JSON Outbox Batch Engine)"]
+        PhotoEngine["photoSyncEngine (Binary Upload Engine)"]
     end
 
-    %% Client Interactions
-    UI -->|Read / Optimistic Write| LocalDB
-    NetworkCtx -->|Online Signal| SyncCtx
-    SyncCtx -->|Trigger Sync| SyncEngine
-    SyncCtx -->|Trigger Photo Queue| PhotoEngine
+    subgraph Backend ["Backend Server (Node.js + Express)"]
+        Auth["JWT Auth Middleware"]
+        SyncCtrl["Sync Controller"]
+        AttachCtrl["Attachment Controller"]
+    end
 
-    %% Network Requests
-    SyncEngine -->|POST /api/sync/batch | SyncController
-    PhotoEngine -->|POST /api/work-orders/:id/attachments | WorkOrderRoutes
+    subgraph Database ["Primary Database (PostgreSQL)"]
+        PGDB["fsm_db Database"]
+    end
 
-    %% Server to DB
-    SyncController --> AuthMiddleware
-    SyncController --> IdempotencyStore
-    IdempotencyStore --> PGDB
-    WorkOrderRoutes --> DiskStorage
+    subgraph Storage ["Attachment Storage"]
+        S3Storage["AWS S3 / Local Disk Storage"]
+    end
+
+    UI -->|Optimistic Reads & IndexedDB Writes| IndexedDBStorage
+    NetMon -->|Online Connection Signal| SyncPath
+    IndexedDBStorage -->|Read Queued Outbox Items| SyncPath
+
+    SyncEngine -->|POST Batch JSON Payload| SyncCtrl
+    PhotoEngine -->|POST Multipart Image File| AttachCtrl
+
+    SyncCtrl --> Auth
+    Auth -->|SQL Transactions & Version Checks| PGDB
+
+    AttachCtrl -->|Save Image Metadata| PGDB
+    AttachCtrl -->|Upload Binary Image| S3Storage
 ```
 
 ---
 
-## 2. Database ER Diagram (PostgreSQL Data Model)
+## 2. Dexie IndexedDB Schema (Client Storage)
+
+```typescript
+// Dexie Database Schema definition (frontend/src/services/db.ts)
+this.version(4).stores({
+  workOrders: 'id, orderNumber, status, scheduledDate, _syncStatus',
+  attachments: 'id, workOrderId, status, createdAt, timestamp',
+  outbox: 'mutationId, workOrderId, actionType, status, timestamp',
+  syncMeta: 'key',
+});
+```
+
+---
+
+## 3. Primary Database ER Diagram & Relational Schema
+
+For complete entity-relationship documentation and full table definitions, see **[docs/ER_DIAGRAM.md](file:///d:/RealTimeProject/docs/ER_DIAGRAM.md)**.
 
 ```mermaid
 erDiagram
-    USERS ||--o{ WORK_ORDERS : "assigned_to / created_by"
+    USERS ||--o{ WORK_ORDERS : "assigned to (technician)"
+    USERS ||--o{ WORK_ORDER_ATTACHMENTS : "uploaded by"
+    USERS ||--o{ WORK_ORDER_NOTES : "authored by"
+    USERS ||--o{ WORK_ORDER_READINGS : "recorded by"
+    USERS ||--o{ WORK_ORDER_HISTORIES : "triggered by"
+
     CUSTOMERS ||--o{ ASSETS : "owns"
-    CUSTOMERS ||--o{ WORK_ORDERS : "requests"
-    ASSETS ||--o{ WORK_ORDERS : "location_of"
-    WORK_ORDERS ||--o{ CHECKLIST_ITEMS : "contains"
-    WORK_ORDERS ||--o{ READINGS : "records"
-    WORK_ORDERS ||--o{ NOTES : "attaches"
-    WORK_ORDERS ||--o{ ATTACHMENTS : "includes"
-    WORK_ORDERS ||--o{ WORK_ORDER_HISTORIES : "tracks"
+    CUSTOMERS ||--o{ WORK_ORDERS : "billed to"
+
+    ASSETS ||--o{ WORK_ORDERS : "serviced in"
+
+    WORK_ORDERS ||--o{ WORK_ORDER_CHECKLISTS : "contains tasks"
+    WORK_ORDERS ||--o{ WORK_ORDER_ATTACHMENTS : "has photos"
+    WORK_ORDERS ||--o{ WORK_ORDER_NOTES : "has notes"
+    WORK_ORDERS ||--o{ WORK_ORDER_READINGS : "has readings"
+    WORK_ORDERS ||--o{ WORK_ORDER_HISTORIES : "logs audit trail"
 
     USERS {
         uuid id PK
         string name
-        string email
-        string password_hash
-        string role "ADMIN_DISPATCHER | TECHNICIAN"
-        string phone
+        string email UK
+        string password
+        string role
+        timestamp created_at
     }
 
     CUSTOMERS {
         uuid id PK
         string name
-        string company_name
+        string contact_person
         string email
         string phone
         string address
+        timestamp created_at
     }
 
     ASSETS {
         uuid id PK
         uuid customer_id FK
         string machine_name
-        string model_number
+        string machine_type
+        string model_name
         string serial_number
-        string status
+        string image_url
+        timestamp created_at
     }
 
     WORK_ORDERS {
         uuid id PK
-        string order_number
+        string order_number UK
         string title
         string description
-        string status "NEW | PENDING | IN_PROGRESS | COMPLETED | CANCELLED"
-        string priority "LOW | MEDIUM | HIGH | URGENT"
+        string status
+        string priority
+        integer version
         uuid customer_id FK
         uuid asset_id FK
         uuid technician_id FK
-        integer version
-        datetime scheduled_date
-        datetime completed_at
+        timestamp scheduled_date
+        timestamp completed_at
+        timestamp created_at
     }
 
-    CHECKLIST_ITEMS {
+    WORK_ORDER_CHECKLISTS {
         uuid id PK
         uuid work_order_id FK
-        string task
+        string task_description
         boolean is_completed
-        datetime completed_at
+        integer order_index
+        timestamp completed_at
     }
 
-    READINGS {
-        uuid id PK
-        uuid work_order_id FK
-        uuid user_id FK
-        string metric
-        string value
-        string unit
-        datetime recorded_at
-    }
-
-    NOTES {
-        uuid id PK
-        uuid work_order_id FK
-        uuid user_id FK
-        text content
-        string type "NOTE | SYSTEM"
-        datetime created_at
-    }
-
-    ATTACHMENTS {
+    WORK_ORDER_ATTACHMENTS {
         uuid id PK
         uuid work_order_id FK
         uuid technician_id FK
@@ -146,6 +155,26 @@ erDiagram
         string file_url
         integer file_size
         string mime_type
+        timestamp created_at
+    }
+
+    WORK_ORDER_NOTES {
+        uuid id PK
+        uuid work_order_id FK
+        uuid user_id FK
+        string content
+        string type
+        timestamp created_at
+    }
+
+    WORK_ORDER_READINGS {
+        uuid id PK
+        uuid work_order_id FK
+        uuid user_id FK
+        string metric
+        string value
+        string unit
+        timestamp recorded_at
     }
 
     WORK_ORDER_HISTORIES {
@@ -153,23 +182,10 @@ erDiagram
         uuid work_order_id FK
         uuid user_id FK
         string action
-        json payload
-        datetime created_at
+        string description
+        jsonb metadata
+        timestamp created_at
     }
-```
-
----
-
-## 3. Dexie IndexedDB Schema (Client Storage)
-
-```typescript
-// Dexie Database Schema definition (frontend/src/services/db.ts)
-this.version(1).stores({
-  workOrders: 'id, orderNumber, status, technicianId, customerId, assetId, _syncStatus',
-  outbox: 'mutationId, workOrderId, actionType, timestamp, status',
-  attachments: 'id, workOrderId, status, createdAt',
-  syncMeta: 'key',
-});
 ```
 
 ---
@@ -233,4 +249,5 @@ this.version(1).stores({
 ### Q10: What would you improve with an additional month of development time?
 1. **Delta-Sync Protocol**: Instead of downloading entire work order objects, transfer JSON patch deltas (`RFC 6902`).
 2. **Background Sync Service Worker**: Use Web Background Sync API (`self.registration.sync.register()`) to sync outbox changes even when the browser tab is closed.
-3. **Field Asset QR Code Scanner**: Allow technicians to scan equipment QR codes offline to load asset maintenance history.
+3. **Emergency "Black Box" Diagnostic Export & One-Click DB Dump**: Allow technicians to dump encrypted Dexie IndexedDB state & diagnostic logs to a single `.json` file for emergency manual triage if a hardware fault prevents sync.
+4. **Message Broker Integration (RabbitMQ / Apache Kafka)**: Transition from synchronous batch processing to an event-driven architecture using RabbitMQ or Kafka for high-throughput outbox mutation queue consumer processing.

@@ -11,7 +11,6 @@ import {
   AuditTrailCard,
 } from '../components/work-orders';
 import {
-  getWorkOrderById,
   updateWorkOrderStatus,
   toggleChecklistItem,
   addWorkOrderNote,
@@ -22,6 +21,7 @@ import {
   type WorkOrderReadingItem,
 } from '../services/workOrderService';
 import { type WorkOrderAttachment } from '../services/db';
+import { syncEngine } from '../services/syncEngine';
 import { useAuth } from '../context/AuthContext';
 import { useSync } from '../context/SyncContext';
 import { photoSyncEngine } from '../services/photoSyncEngine';
@@ -33,15 +33,7 @@ export const WorkOrderDetailsPage: FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const {
-    isSyncing,
-    syncNow,
-    mutations,
-    queuePhoto,
-    retryPhoto,
-    photoPendingCount,
-    deletePhoto,
-  } = useSync();
+  const { isSyncing, syncNow, mutations, queuePhoto, retryPhoto, photoPendingCount, deletePhoto } = useSync();
 
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -65,20 +57,32 @@ export const WorkOrderDetailsPage: FC = () => {
   useEffect(() => {
     if (!id) return;
 
+    let isMounted = true;
     const loadData = async () => {
-      setIsLoading(true);
-      setErrorMessage(null);
-      try {
-        const order = await getWorkOrderById(id);
-        setWorkOrder(order);
-      } catch (err: any) {
-        setErrorMessage(err?.message || 'Failed to load work order details.');
-      } finally {
+      const cached = await syncEngine.getCachedWorkOrderById(id);
+      if (cached && isMounted) {
+        setWorkOrder(cached);
         setIsLoading(false);
+      }
+
+      try {
+        const fresh = await syncEngine.getWorkOrderById(id);
+        if (fresh && isMounted) {
+          setWorkOrder(fresh);
+        }
+      } catch (err: any) {
+        if (!cached && isMounted) {
+          setErrorMessage(err?.message || 'Failed to load work order details.');
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     };
 
     loadData();
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -446,7 +450,8 @@ export const WorkOrderDetailsPage: FC = () => {
                   Work Order #{workOrder.orderNumber}
                 </span>
                 <span className='text-[10px] font-bold text-slate-400'>
-                  Scheduled for {workOrder.scheduledDate} {workOrder.scheduledTime ? `at ${workOrder.scheduledTime}` : ''}
+                  Scheduled for {workOrder.scheduledDate}{' '}
+                  {workOrder.scheduledTime ? `at ${workOrder.scheduledTime}` : ''}
                 </span>
               </div>
               <h1 className='text-lg sm:text-xl font-black text-slate-900 tracking-tight'>{workOrder.title}</h1>
