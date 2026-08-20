@@ -39,3 +39,6 @@ export type { StatusBadgeProps, StatusType } from './StatusBadge';
 
 export { ImageUpload } from './ImageUpload';
 export type { ImageUploadProps, ImageFileItem } from './ImageUpload';
+
+export { StorageIndicator } from './StorageIndicator';
+export type { StorageIndicatorProps } from './StorageIndicator';

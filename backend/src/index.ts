@@ -7,6 +7,8 @@ import menuRoutes from './routes/menuRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import assetRoutes from './routes/assetRoutes';
 import workOrderRoutes from './routes/workOrderRoutes';
+import syncRoutes from './routes/syncRoutes';
+import { globalLimiter } from './middlewares/rateLimiter';
 
 dotenv.config();
 
@@ -17,20 +19,25 @@ app.use(express.json());
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Idempotency-Key, *'
+  );
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Methods', 'PUT, POST, PATCH, DELETE, GET');
-    return res.status(200).json({});
+    return res.status(200).end();
   }
   return next();
 });
 
+app.use('/api', globalLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/menus', menuRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/work-orders', workOrderRoutes);
+app.use('/api/sync', syncRoutes);
 
 app.get('/api/health/ready', async (req: Request, res: Response) => {
   try {
@@ -44,7 +51,7 @@ app.get('/api/health/ready', async (req: Request, res: Response) => {
     res.status(503).json({
       status: 'error',
       message: 'Database connection lost',
-      error: error?.message
+      error: error?.message,
     });
   }
 });

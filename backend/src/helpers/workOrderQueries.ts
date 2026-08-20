@@ -1,6 +1,18 @@
 import { Op } from 'sequelize';
-import { sequelize, WorkOrder, WorkOrderChecklist, Customer, Asset, User } from '../models';
-import type { WorkOrderAttributes, WorkOrderStatus, WorkOrderPriority } from '../models/workOrder';
+import {
+  sequelize,
+  WorkOrder,
+  WorkOrderChecklist,
+  WorkOrderAttachment,
+  Customer,
+  Asset,
+  User,
+  WorkOrderNote,
+  WorkOrderHistory,
+  WorkOrderReading,
+} from '../models';
+import type { WorkOrderPriority } from '../models/workOrder';
+import { recordWorkOrderHistory } from './historyQueries';
 
 export interface CreateWorkOrderInput {
   title: string;
@@ -12,6 +24,7 @@ export interface CreateWorkOrderInput {
   scheduledDate: string;
   scheduledTime?: string;
   checklistItems?: string[];
+  userId?: string | null;
 }
 
 export const generateNextOrderNumber = async (): Promise<string> => {
@@ -32,12 +45,12 @@ export const createWorkOrderWithChecklist = async (input: CreateWorkOrderInput) 
         customerId: input.customerId,
         assetId: input.assetId,
         technicianId: input.technicianId || null,
-        status: 'PENDING',
+        status: 'NEW',
         priority: input.priority,
         scheduledDate: input.scheduledDate,
         scheduledTime: input.scheduledTime || null,
       },
-      { transaction: t }
+      { transaction: t },
     );
 
     if (input.checklistItems && input.checklistItems.length > 0) {
@@ -55,26 +68,36 @@ export const createWorkOrderWithChecklist = async (input: CreateWorkOrderInput) 
       }
     }
 
+    await recordWorkOrderHistory({
+      workOrderId: workOrder.id,
+      userId: input.userId || null,
+      action: 'WORK_ORDER_CREATED',
+      description: `Work order ${orderNumber} created with priority ${input.priority}.`,
+      metadata: { orderNumber, priority: input.priority },
+      transaction: t,
+    });
+
     return await WorkOrder.findByPk(workOrder.id, {
       include: [
         { model: Customer, as: 'customer', attributes: ['id', 'name', 'phone', 'address', 'contactPerson'] },
         { model: Asset, as: 'asset', attributes: ['id', 'machineName', 'machineType', 'modelName', 'imageUrl'] },
         { model: User, as: 'technician', attributes: ['id', 'name', 'email', 'phone'] },
         { model: WorkOrderChecklist, as: 'checklistItems' },
+        {
+          model: WorkOrderAttachment,
+          as: 'attachments',
+          include: [{ model: User, as: 'technician', attributes: ['id', 'name', 'email'] }],
+        },
       ],
       transaction: t,
     });
   });
 };
 
-export const findAllWorkOrders = async (filters?: {
-  search?: string;
-  status?: string;
-  technicianId?: string;
-}) => {
+export const findAllWorkOrders = async (filters?: { search?: string; status?: string; technicianId?: string }) => {
   const whereClause: any = {};
 
-  if (filters?.status && filters.status !== 'ALL') {
+  if (filters?.status) {
     whereClause.status = filters.status;
   }
 
@@ -111,6 +134,27 @@ export const findWorkOrderById = async (id: string) => {
       { model: Asset, as: 'asset' },
       { model: User, as: 'technician', attributes: ['id', 'name', 'email', 'phone'] },
       { model: WorkOrderChecklist, as: 'checklistItems' },
+      {
+        model: WorkOrderAttachment,
+        as: 'attachments',
+        include: [{ model: User, as: 'technician', attributes: ['id', 'name', 'email'] }],
+      },
+      { model: WorkOrderNote, as: 'notes', include: [{ model: User, as: 'user' }] },
+      {
+        model: WorkOrderHistory,
+        as: 'history',
+        include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email', 'role'] }],
+      },
+      {
+        model: WorkOrderReading,
+        as: 'readings',
+        include: [{ model: User, as: 'technician', attributes: ['id', 'name', 'email'] }],
+      },
+    ],
+    order: [
+      [{ model: WorkOrderNote, as: 'notes' }, 'created_at', 'DESC'],
+      [{ model: WorkOrderHistory, as: 'history' }, 'created_at', 'DESC'],
+      [{ model: WorkOrderReading, as: 'readings' }, 'recorded_at', 'DESC'],
     ],
   });
 };
@@ -131,7 +175,7 @@ export const updateWorkOrderById = async (id: string, input: Partial<CreateWorkO
         scheduledDate: input.scheduledDate || workOrder.scheduledDate,
         scheduledTime: input.scheduledTime !== undefined ? input.scheduledTime : workOrder.scheduledTime,
       },
-      { transaction: t }
+      { transaction: t },
     );
 
     if (input.checklistItems && Array.isArray(input.checklistItems)) {
@@ -149,26 +193,28 @@ export const updateWorkOrderById = async (id: string, input: Partial<CreateWorkO
       }
     }
 
+    await recordWorkOrderHistory({
+      workOrderId: id,
+      userId: input.userId || null,
+      action: 'UPDATED',
+      description: 'Work order details updated.',
+      metadata: { priority: input.priority, scheduledDate: input.scheduledDate },
+      transaction: t,
+    });
+
     return await WorkOrder.findByPk(id, {
       include: [
         { model: Customer, as: 'customer', attributes: ['id', 'name', 'phone', 'address', 'contactPerson'] },
         { model: Asset, as: 'asset', attributes: ['id', 'machineName', 'machineType', 'modelName', 'imageUrl'] },
         { model: User, as: 'technician', attributes: ['id', 'name', 'email', 'phone'] },
         { model: WorkOrderChecklist, as: 'checklistItems' },
+        {
+          model: WorkOrderAttachment,
+          as: 'attachments',
+          include: [{ model: User, as: 'technician', attributes: ['id', 'name', 'email'] }],
+        },
       ],
       transaction: t,
     });
   });
-};
-
-export const updateWorkOrderStatusById = async (id: string, status: WorkOrderStatus) => {
-  const workOrder = await WorkOrder.findByPk(id);
-  if (!workOrder) return null;
-
-  const updates: Partial<WorkOrderAttributes> = { status };
-  if (status === 'COMPLETED') {
-    updates.completedAt = new Date();
-  }
-
-  return await workOrder.update(updates);
 };

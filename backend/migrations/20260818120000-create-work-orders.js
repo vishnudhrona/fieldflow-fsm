@@ -9,7 +9,8 @@ module.exports = {
     // 1. Create work_orders table
     await queryInterface.createTable('work_orders', {
       id: {
-        type: Sequelize.STRING(36),
+        type: Sequelize.UUID,
+        defaultValue: Sequelize.UUIDV4,
         primaryKey: true,
         allowNull: false,
       },
@@ -27,7 +28,7 @@ module.exports = {
         allowNull: true,
       },
       customer_id: {
-        type: Sequelize.STRING(36),
+        type: Sequelize.UUID,
         allowNull: false,
         references: {
           model: 'customers',
@@ -37,7 +38,7 @@ module.exports = {
         onDelete: 'CASCADE',
       },
       asset_id: {
-        type: Sequelize.STRING(36),
+        type: Sequelize.UUID,
         allowNull: false,
         references: {
           model: 'assets',
@@ -47,7 +48,7 @@ module.exports = {
         onDelete: 'CASCADE',
       },
       technician_id: {
-        type: Sequelize.STRING(36),
+        type: Sequelize.UUID,
         allowNull: true,
         references: {
           model: 'users',
@@ -57,8 +58,8 @@ module.exports = {
         onDelete: 'SET NULL',
       },
       status: {
-        type: Sequelize.ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
-        defaultValue: 'PENDING',
+        type: Sequelize.ENUM('NEW', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
+        defaultValue: 'NEW',
         allowNull: false,
       },
       priority: {
@@ -78,6 +79,11 @@ module.exports = {
         type: Sequelize.DATE,
         allowNull: true,
       },
+      version: {
+        type: Sequelize.INTEGER,
+        defaultValue: 1,
+        allowNull: false,
+      },
       created_at: {
         type: Sequelize.DATE,
         allowNull: false,
@@ -93,12 +99,13 @@ module.exports = {
     // 2. Create work_order_checklists table (1NF / 3NF Normalized checklist items)
     await queryInterface.createTable('work_order_checklists', {
       id: {
-        type: Sequelize.STRING(36),
+        type: Sequelize.UUID,
+        defaultValue: Sequelize.UUIDV4,
         primaryKey: true,
         allowNull: false,
       },
       work_order_id: {
-        type: Sequelize.STRING(36),
+        type: Sequelize.UUID,
         allowNull: false,
         references: {
           model: 'work_orders',

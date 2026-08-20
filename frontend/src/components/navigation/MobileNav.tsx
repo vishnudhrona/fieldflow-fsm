@@ -2,8 +2,10 @@ import type { FC } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { NetworkSimulator } from '../NetworkSimulator';
-import { getRoleLabel } from '../../services/authService';
+import { getRoleLabel, UserRole } from '../../services/authService';
 import { LogOut } from 'lucide-react';
+import { Can } from '../auth';
+import { StorageIndicator } from '../ui';
 
 export interface MobileNavProps {
   className?: string;
@@ -49,7 +51,10 @@ export const MobileNav: FC<MobileNavProps> = ({ className = '' }) => {
       </Link>
 
       <div className='flex items-center gap-2'>
-        <NetworkSimulator />
+        <Can roles={UserRole.TECHNICIAN}>
+          <StorageIndicator />
+          <NetworkSimulator />
+        </Can>
         <LogOut className='w-4 h-4 text-rose-600 cursor-pointer' onClick={handleLogoutClick} />
       </div>
     </header>

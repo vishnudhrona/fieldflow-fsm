@@ -24,6 +24,13 @@ export interface StatusBadgeProps {
 }
 
 const statusColorMap: Record<string, { bg: string; text: string; border: string; dot: string; defaultLabel: string }> = {
+  NEW:{
+    bg: 'bg-blue-50',
+    text: 'text-blue-700',
+    border: 'border-blue-200',
+    dot: 'bg-blue-500',
+    defaultLabel: 'New',
+  },
   ACTIVE: {
     bg: 'bg-emerald-50',
     text: 'text-emerald-700',

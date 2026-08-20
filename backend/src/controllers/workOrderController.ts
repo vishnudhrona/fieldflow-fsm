@@ -4,9 +4,9 @@ import {
   findAllWorkOrders,
   findWorkOrderById,
   updateWorkOrderById,
-  updateWorkOrderStatusById,
   type CreateWorkOrderInput,
 } from '../helpers/workOrderQueries';
+import { recordWorkOrderHistory } from '../helpers/historyQueries';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { ROLES } from '../config/constants';
 
@@ -41,6 +41,7 @@ export const createWorkOrder = async (req: AuthenticatedRequest, res: Response):
       scheduledDate,
       scheduledTime,
       checklistItems: Array.isArray(checklistItems) ? checklistItems : [],
+      userId: req.user?.id || null,
     };
 
     const newWorkOrder = await createWorkOrderWithChecklist(input);
@@ -110,7 +111,10 @@ export const getWorkOrder = async (req: AuthenticatedRequest, res: Response): Pr
 export const updateWorkOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
-    const updated = await updateWorkOrderById(id, req.body);
+    const updated = await updateWorkOrderById(id, {
+      ...req.body,
+      userId: req.user?.id || null,
+    });
 
     if (!updated) {
       res.status(404).json({ message: 'Work order not found' });
@@ -124,43 +128,6 @@ export const updateWorkOrder = async (req: AuthenticatedRequest, res: Response):
   } catch (error: any) {
     res.status(500).json({
       message: 'Internal server error while updating work order',
-      error: error?.message,
-    });
-  }
-};
-
-export const updateWorkOrderStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params as { id: string };
-    const { status } = req.body;
-
-    if (!status) {
-      res.status(400).json({ message: 'Status is required' });
-      return;
-    }
-
-    if (req.user?.role === ROLES.TECHNICIAN) {
-      const existing = await findWorkOrderById(id);
-      if (!existing || existing.technicianId !== req.user.id) {
-        res.status(403).json({ message: 'Forbidden: You cannot modify this work order status' });
-        return;
-      }
-    }
-
-    const updated = await updateWorkOrderStatusById(id, status);
-
-    if (!updated) {
-      res.status(404).json({ message: 'Work order not found' });
-      return;
-    }
-
-    res.status(200).json({
-      message: 'Work order status updated successfully',
-      workOrder: updated,
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      message: 'Internal server error while updating work order status',
       error: error?.message,
     });
   }

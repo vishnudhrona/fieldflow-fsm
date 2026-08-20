@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type FC } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Loader2, Wrench, UserCheck, Calendar, Edit, Ban } from 'lucide-react';
+import { Plus, Loader2, Wrench, UserCheck, Calendar, Edit, Ban, CloudOff } from 'lucide-react';
 import {
   getWorkOrders,
   updateWorkOrderStatus,
@@ -8,6 +8,7 @@ import {
   type WorkOrderStatus,
 } from '../services/workOrderService';
 import { useDebounce } from '../hooks';
+import { useNetwork } from '../context/NetworkContext';
 import { Can } from '../components/auth';
 import { UserRole } from '../services/authService';
 import { WORK_ORDER_COLUMNS } from '../constants';
@@ -24,17 +25,23 @@ import {
   type Column,
   type TabItem,
 } from '../components/ui';
+import { useSync } from '../context/SyncContext';
 
-const FILTER_TABS: TabItem<'ALL' | WorkOrderStatus>[] = [
-  { id: 'ALL', label: 'All Orders' },
+export type WorkOrderFilterTab = 'NEW' | WorkOrderStatus;
+
+const FILTER_TABS: TabItem<WorkOrderFilterTab>[] = [
+  { id: 'NEW', label: 'New' },
   { id: 'PENDING', label: 'Pending' },
   { id: 'IN_PROGRESS', label: 'In Progress' },
   { id: 'COMPLETED', label: 'Completed' },
+  { id: 'CANCELLED', label: 'Cancelled', className: 'hidden md:flex' },
 ];
 
 export const WorkOrdersPage: FC = () => {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<'ALL' | WorkOrderStatus>('ALL');
+  const { isOnline } = useNetwork();
+  const { totalPending } = useSync();
+  const [filter, setFilter] = useState<WorkOrderFilterTab>('NEW');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -58,14 +65,14 @@ export const WorkOrdersPage: FC = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, [debouncedSearchTerm, filter]);
+  }, [debouncedSearchTerm, filter, isOnline]);
 
   const handleCancelWorkOrder = async (order: WorkOrder) => {
     if (order.status === 'CANCELLED') return;
     const confirmCancel = window.confirm(`Are you sure you want to cancel work order ${order.orderNumber}?`);
     if (!confirmCancel) return;
 
-    setWorkOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: 'CANCELLED' } : o)));
+    setWorkOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: 'CANCELLED', _syncStatus: 'PENDING_SYNC' } : o)));
 
     try {
       await updateWorkOrderStatus(order.id, 'CANCELLED');
@@ -78,14 +85,22 @@ export const WorkOrdersPage: FC = () => {
   const columns = useMemo<Column<WorkOrder>[]>(() => {
     const dataColumns = mapObjectValues(WORK_ORDER_COLUMNS, ['header']);
 
-    return dataColumns.map((col: { accessor: string; }) => {
+    return dataColumns.map((col: any) => {
       if (col.accessor === 'orderNumber') {
         return {
           ...col,
           cell: (order: WorkOrder) => (
-            <span className='font-mono font-bold text-xs bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md'>
-              {order.orderNumber}
-            </span>
+            <div className='flex items-center gap-1.5'>
+              <span className='font-mono font-bold text-xs bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md'>
+                {order.orderNumber}
+              </span>
+              {order._syncStatus === 'PENDING_SYNC' && (
+                <span
+                  title='Modified offline (pending sync)'
+                  className='w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0'
+                />
+              )}
+            </div>
           ),
         };
       }
@@ -215,7 +230,7 @@ export const WorkOrdersPage: FC = () => {
   }, [navigate]);
 
   return (
-    <div className='space-y-5'>
+    <div className='space-y-4'>
       <div className='flex items-center justify-between'>
         <div>
           <h1 className='text-xl font-black text-slate-900 tracking-tight'>Work Orders</h1>
@@ -233,29 +248,57 @@ export const WorkOrdersPage: FC = () => {
         </Can>
       </div>
 
+      {!isOnline && (
+        <div className='p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-3 shadow-2xs'>
+          <div className='flex items-center gap-2 min-w-0'>
+            <CloudOff className='w-4 h-4 text-amber-600 shrink-0' />
+            <span className='font-semibold truncate'>
+              Offline Mode: Displaying cached active work orders. Sync engine will flush {totalPending > 0 ? `${totalPending} changes ` : ''}when reconnected.
+            </span>
+          </div>
+          <span className='text-[10px] font-extrabold uppercase tracking-wider bg-amber-200/80 text-amber-800 px-2 py-0.5 rounded-full shrink-0'>
+            Offline
+          </span>
+        </div>
+      )}
+
       <SearchBar
         value={searchTerm}
         onChange={setSearchTerm}
         placeholder='Search order #, service title, customer, or equipment...'
       />
 
-      <Tabs<'ALL' | WorkOrderStatus> tabs={FILTER_TABS} activeTab={filter} onChange={setFilter} />
+      <Tabs<WorkOrderFilterTab> tabs={FILTER_TABS} activeTab={filter} onChange={setFilter} />
 
       {isLoading ? (
         <div className='bg-white rounded-2xl p-12 border border-slate-200 text-center flex flex-col items-center justify-center gap-2.5'>
           <Loader2 className='w-7 h-7 animate-spin text-[#D12026]' />
-          <p className='text-xs font-semibold text-slate-500'>Loading work orders from database...</p>
+          <p className='text-xs font-semibold text-slate-500'>Loading work orders...</p>
         </div>
       ) : workOrders.length === 0 ? (
         <EmptyState
-          title='No work orders found'
+          title={
+            !isOnline
+              ? filter === 'NEW'
+                ? 'No offline New orders'
+                : filter === 'COMPLETED'
+                ? 'No recent completed orders offline'
+                : `No offline ${filter.toLowerCase().replace('_', ' ')} orders`
+              : 'No work orders found'
+          }
           description={
-            searchTerm || filter !== 'ALL'
+            !isOnline
+              ? filter === 'NEW'
+                ? 'Switch to online mode to sync all new assignments from the cloud.'
+                : filter === 'COMPLETED'
+                ? 'Only the last 5 completed jobs are cached locally. Connect to view full history.'
+                : 'Switch to online mode to sync and fetch all work orders from the cloud.'
+              : searchTerm || filter !== 'NEW'
               ? 'Try changing your search query or filter tab.'
               : 'Dispatch your first work order to start managing field assignments.'
           }
-          actionText='+ Assign Work'
-          onAction={() => navigate('/work-orders/add')}
+          actionText={isOnline ? '+ Assign Work' : undefined}
+          onAction={isOnline ? () => navigate('/work-orders/add') : undefined}
         />
       ) : (
         <>
@@ -268,12 +311,22 @@ export const WorkOrdersPage: FC = () => {
                 location={order.customer?.address}
                 image={order.asset?.imageUrl || undefined}
                 statusBadgeValue={order.status}
+                onClick={() => navigate(`/work-orders/${order.id}`)}
                 details={{
                   Equipment: `${order.asset?.machineName || 'N/A'} (${order.asset?.modelName || 'General'})`,
                   Technician: order.technician?.name || 'Unassigned',
                   Scheduled: `${order.scheduledDate} ${order.scheduledTime ? `at ${order.scheduledTime}` : ''}`,
                 }}
-                leftStat={<span className='font-semibold text-slate-600'>{order.priority} Priority</span>}
+                leftStat={
+                  <div className='flex items-center justify-center gap-1.5'>
+                    <span className='font-semibold text-slate-600'>{order.priority} Priority</span>
+                    {order._syncStatus === 'PENDING_SYNC' && (
+                      <span className='text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200'>
+                        Pending Sync
+                      </span>
+                    )}
+                  </div>
+                }
                 rightStat={<span className='font-bold text-[#D12026]'>{order.status}</span>}
                 rightIcon={
                   <Can roles={UserRole.ADMIN_DISPATCHER}>
@@ -305,7 +358,13 @@ export const WorkOrdersPage: FC = () => {
           </div>
 
           <div className='hidden md:block'>
-            <Table<WorkOrder> columns={columns} data={workOrders} keyExtractor={(order) => order.id} hoverable />
+            <Table<WorkOrder>
+              columns={columns}
+              data={workOrders}
+              keyExtractor={(order) => order.id}
+              onRowClick={(order) => navigate(`/work-orders/${order.id}`)}
+              hoverable
+            />
           </div>
         </>
       )}

@@ -1,6 +1,6 @@
 import { Model, Sequelize, DataTypes } from 'sequelize';
 
-export type WorkOrderStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type WorkOrderStatus = 'NEW' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type WorkOrderPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY';
 
 export interface WorkOrderAttributes {
@@ -16,6 +16,7 @@ export interface WorkOrderAttributes {
   scheduledDate: string;
   scheduledTime?: string | null;
   completedAt?: Date | null;
+  version?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -33,6 +34,7 @@ export class WorkOrder extends Model<WorkOrderAttributes> implements WorkOrderAt
   declare scheduledDate: string;
   declare scheduledTime: string | null;
   declare completedAt: Date | null;
+  declare version: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -90,9 +92,9 @@ export default function (sequelize: Sequelize, dataTypes: typeof DataTypes) {
         },
       },
       status: {
-        type: dataTypes.ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
+        type: dataTypes.ENUM('NEW', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
         allowNull: false,
-        defaultValue: 'PENDING',
+        defaultValue: 'NEW',
       },
       priority: {
         type: dataTypes.ENUM('LOW', 'MEDIUM', 'HIGH', 'EMERGENCY'),
@@ -113,6 +115,11 @@ export default function (sequelize: Sequelize, dataTypes: typeof DataTypes) {
         type: dataTypes.DATE,
         allowNull: true,
         field: 'completed_at',
+      },
+      version: {
+        type: dataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
       },
     },
     {

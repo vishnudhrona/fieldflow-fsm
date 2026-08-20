@@ -65,6 +65,7 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     const handleOffline = () => {
       setBrowserOnline(false);
+      window.dispatchEvent(new CustomEvent('fsm_network_change'));
     };
 
     checkConnectivity();
@@ -83,6 +84,7 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
   const setNetworkMode = (mode: NetworkMode) => {
     localStorage.setItem('fsm_simulated_network', mode);
     setNetworkModeState(mode);
+    window.dispatchEvent(new CustomEvent('fsm_network_change'));
     if (mode === 'ONLINE' && browserOnline) {
       setReconnectCount((c) => c + 1);
       window.dispatchEvent(new CustomEvent('app:online_reconnect'));

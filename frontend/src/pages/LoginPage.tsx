@@ -1,15 +1,26 @@
 import { useState, type FC } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
+import { Shield, Wrench } from 'lucide-react';
 import { Input, Button } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { type LoginCredentials } from '../services/authService';
 
 export const LoginPage: FC = () => {
-  const { register, handleSubmit } = useForm<LoginCredentials>();
+  const { register, handleSubmit, setValue } = useForm<LoginCredentials>();
   const navigate = useNavigate();
   const { login } = useAuth();
   const [apiMessage, setApiMessage] = useState<string | null>(null);
+
+  const fillAdminCredentials = () => {
+    setValue('email', 'admin@example.com');
+    setValue('password', 'admin123');
+  };
+
+  const fillTechCredentials = () => {
+    setValue('email', 'tech@example.com');
+    setValue('password', 'tech123');
+  };
 
   const onSubmit = async (data: LoginCredentials) => {
     try {
@@ -21,9 +32,35 @@ export const LoginPage: FC = () => {
   };
 
   return (
-    <div className='w-full max-w-sm bg-white border border-slate-200 px-5 py-8 rounded-[2rem] shadow-lg z-10'>
+    <div className='w-full max-w-sm bg-white border border-slate-200 px-5 py-7 rounded-[2rem] shadow-lg z-10 space-y-4'>
+      {/* Quick Demo Credentials Buttons */}
+      <div className='bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-2 text-center'>
+        <span className='text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block'>
+          Quick Demo Autofill
+        </span>
+        <div className='grid grid-cols-2 gap-2'>
+          <button
+            type='button'
+            onClick={fillAdminCredentials}
+            className='flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 font-bold text-xs shadow-2xs transition-all cursor-pointer'
+          >
+            <Shield className='w-3.5 h-3.5 text-[#D12026]' />
+            <span>Admin</span>
+          </button>
+
+          <button
+            type='button'
+            onClick={fillTechCredentials}
+            className='flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 font-bold text-xs shadow-2xs transition-all cursor-pointer'
+          >
+            <Wrench className='w-3.5 h-3.5 text-blue-600' />
+            <span>Technician</span>
+          </button>
+        </div>
+      </div>
+
       {apiMessage && (
-        <div className='mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-600'>{apiMessage}</div>
+        <div className='rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-600'>{apiMessage}</div>
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className='space-y-4'>
@@ -49,7 +86,7 @@ export const LoginPage: FC = () => {
           />
         </div>
 
-        <div className='pt-4'>
+        <div className='pt-2'>
           <Button
             type='submit'
             fullWidth
