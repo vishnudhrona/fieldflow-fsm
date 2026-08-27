@@ -30,6 +30,7 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
     mutations,
     pendingAttachments = [],
     totalPending,
+    conflictCount,
     isSyncing,
     syncNow,
     retryMutation,
@@ -121,14 +122,10 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
     return JSON.stringify(mutation.payload);
   };
 
-  const failedMutationsCount = mutations.filter((m) => m.status === 'FAILED').length;
-  const failedPhotosCount = pendingAttachments.filter((a) => a.status === 'FAILED').length;
-  const totalFailed = failedMutationsCount + failedPhotosCount;
-  const conflictCount = mutations.filter((m) => m.status === 'CONFLICT').length;
-
   const filteredMutations = mutations.filter((m) => {
     if (activeTab === 'PHOTOS') return false;
     if (activeTab === 'CONFLICTS') return m.status === 'CONFLICT';
+    if (activeTab === 'MUTATIONS') return m.status !== 'CONFLICT';
     return true;
   });
 
@@ -188,22 +185,26 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
           <div className='grid grid-cols-4 gap-2 p-3 sm:p-4 bg-slate-50 border-b border-slate-100 text-center shrink-0'>
             <div className='bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs'>
               <span className='text-[10px] font-bold text-slate-400 uppercase tracking-wider block'>Pending</span>
-              <span className='text-base font-black text-amber-600'>{totalPending}</span>
+              <span className='text-base font-black text-amber-600'>
+                {mutations.filter((m) => m.status === 'PENDING').length}
+              </span>
             </div>
 
             <div className='bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs'>
-              <span className='text-[10px] font-bold text-slate-400 uppercase tracking-wider block'>Syncing</span>
-              <span className='text-base font-black text-blue-600'>{isSyncing ? 'Active' : 'Idle'}</span>
+              <span className='text-[10px] font-bold text-slate-400 uppercase tracking-wider block'>Retry</span>
+              <span className='text-base font-black text-rose-600'>
+                {mutations.filter((m) => m.status === 'RETRY').length}
+              </span>
             </div>
 
             <div className='bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs'>
-              <span className='text-[10px] font-bold text-slate-400 uppercase tracking-wider block'>Failed</span>
-              <span className='text-base font-black text-rose-600'>{totalFailed}</span>
-            </div>
-
-            <div className='bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs'>
-              <span className='text-[10px] font-bold text-slate-400 uppercase tracking-wider block'>Conflict</span>
+              <span className='text-[10px] font-bold text-slate-400 uppercase tracking-wider block'>Conflicts</span>
               <span className='text-base font-black text-purple-600'>{conflictCount}</span>
+            </div>
+
+            <div className='bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs'>
+              <span className='text-[10px] font-bold text-slate-400 uppercase tracking-wider block'>Photos</span>
+              <span className='text-base font-black text-blue-600'>{pendingAttachments.length}</span>
             </div>
           </div>
 
@@ -228,8 +229,22 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Mutations ({mutations.length})
+              Mutations ({mutations.filter((m) => m.status !== 'CONFLICT').length})
             </button>
+            {conflictCount > 0 && (
+              <button
+                type='button'
+                onClick={() => setActiveTab('CONFLICTS')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                  activeTab === 'CONFLICTS'
+                    ? 'bg-purple-700 text-white shadow-2xs'
+                    : 'text-purple-700 hover:bg-purple-50 bg-purple-50/60 border border-purple-200/60'
+                }`}
+              >
+                <AlertTriangle className='w-3 h-3' />
+                Conflicts ({conflictCount})
+              </button>
+            )}
             <button
               type='button'
               onClick={() => setActiveTab('PHOTOS')}
@@ -241,19 +256,6 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
             >
               Photos ({pendingAttachments.length})
             </button>
-            {conflictCount > 0 && (
-              <button
-                type='button'
-                onClick={() => setActiveTab('CONFLICTS')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 ${
-                  activeTab === 'CONFLICTS'
-                    ? 'bg-rose-600 text-white shadow-2xs'
-                    : 'text-rose-700 bg-rose-50 hover:bg-rose-100'
-                }`}
-              >
-                Conflicts ({conflictCount})
-              </button>
-            )}
           </div>
 
           {/* Scrollable Items List */}
@@ -281,12 +283,10 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
                     <div
                       key={mutation.mutationId}
                       className={`p-3.5 sm:p-4 rounded-2xl border transition-all shadow-2xs bg-white ${
-                        mutation.status === 'FAILED'
-                          ? 'border-rose-300 bg-rose-50/20'
-                          : mutation.status === 'CONFLICT'
+                        mutation.status === 'CONFLICT'
                           ? 'border-purple-300 bg-purple-50/20'
-                          : mutation.status === 'SYNCING'
-                          ? 'border-blue-300 bg-blue-50/20'
+                          : mutation.status === 'RETRY'
+                          ? 'border-rose-300 bg-rose-50/20'
                           : 'border-slate-200'
                       }`}
                     >
@@ -311,10 +311,9 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
                             </span>
                           )}
 
-                          {mutation.status === 'SYNCING' && (
-                            <span className='text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1'>
-                              <RefreshCw className='w-2.5 h-2.5 animate-spin' />
-                              Syncing
+                          {mutation.status === 'RETRY' && (
+                            <span className='text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200'>
+                              Retry ({mutation.retryCount})
                             </span>
                           )}
 
@@ -322,12 +321,6 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
                             <span className='text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1'>
                               <AlertTriangle className='w-2.5 h-2.5' />
                               Conflict
-                            </span>
-                          )}
-
-                          {mutation.status === 'FAILED' && (
-                            <span className='text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200'>
-                              Failed ({mutation.retryCount})
                             </span>
                           )}
                         </div>
@@ -348,7 +341,13 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
                         </div>
 
                         {mutation.errorMessage && (
-                          <p className='text-[10px] text-rose-600 bg-rose-50 p-2 rounded-xl border border-rose-200 font-medium'>
+                          <p
+                            className={`text-[10px] p-2 rounded-xl border font-medium ${
+                              mutation.status === 'CONFLICT'
+                                ? 'text-purple-700 bg-purple-50 border-purple-200'
+                                : 'text-rose-600 bg-rose-50 border-rose-200'
+                            }`}
+                          >
                             {mutation.errorMessage}
                           </p>
                         )}
@@ -365,7 +364,7 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
                           <Trash2 className='w-3.5 h-3.5' />
                         </button>
 
-                        {(mutation.status === 'FAILED' || mutation.status === 'CONFLICT') && (
+                        {(mutation.status === 'RETRY' || mutation.status === 'CONFLICT') && (
                           <Button
                             size='sm'
                             variant='outline'
@@ -374,7 +373,7 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
                             leftIcon={<RefreshCw className='w-3 h-3' />}
                             className='text-[11px] py-1 px-3 rounded-lg font-bold'
                           >
-                            Retry
+                            {mutation.status === 'CONFLICT' ? 'Force Retry' : 'Retry'}
                           </Button>
                         )}
                       </div>

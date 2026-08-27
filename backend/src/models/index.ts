@@ -11,6 +11,8 @@ import WorkOrderAttachmentModelInit from './workOrderAttachment';
 import WorkOrderNoteModelInit from './workOrderNote';
 import WorkOrderHistoryModelInit from './workOrderHistory';
 import WorkOrderReadingModelInit from './workOrderReading';
+import SyncOperationModelInit from './syncOperation';
+import WorkOrderConflictModelInit from './workOrderConflict';
 
 dotenv.config();
 
@@ -18,15 +20,7 @@ const env = process.env.NODE_ENV || 'development';
 const config = (configObject as any)[env] || configObject.development;
 
 let sequelize: Sequelize;
-if (config.use_env_variable) {
-  const dbUrl = process.env[config.use_env_variable];
-  if (!dbUrl) {
-    throw new Error(`Environment variable ${config.use_env_variable} is not set.`);
-  }
-  sequelize = new Sequelize(dbUrl, config);
-} else {
-  sequelize = new Sequelize(config.database!, config.username!, config.password!, config);
-}
+sequelize = new Sequelize(config.database!, config.username!, config.password!, config);
 
 const User = UserModelInit(sequelize, DataTypes);
 const Customer = CustomerModelInit(sequelize, DataTypes);
@@ -38,6 +32,8 @@ const WorkOrderAttachment = WorkOrderAttachmentModelInit(sequelize, DataTypes);
 const WorkOrderNote = WorkOrderNoteModelInit(sequelize, DataTypes);
 const WorkOrderHistory = WorkOrderHistoryModelInit(sequelize, DataTypes);
 const WorkOrderReading = WorkOrderReadingModelInit(sequelize, DataTypes);
+const SyncOperation = SyncOperationModelInit(sequelize, DataTypes);
+const WorkOrderConflict = WorkOrderConflictModelInit(sequelize, DataTypes);
 
 Customer.hasMany(Asset, { foreignKey: 'customerId', as: 'assets', onDelete: 'SET NULL' });
 Asset.belongsTo(Customer, { foreignKey: 'customerId', as: 'customer' });
@@ -78,6 +74,14 @@ WorkOrderReading.belongsTo(WorkOrder, { foreignKey: 'workOrderId', as: 'workOrde
 User.hasMany(WorkOrderReading, { foreignKey: 'userId', as: 'readings', onDelete: 'SET NULL' });
 WorkOrderReading.belongsTo(User, { foreignKey: 'userId', as: 'technician' });
 
+User.hasMany(SyncOperation, { foreignKey: 'actorId', as: 'syncOperations', onDelete: 'CASCADE' });
+SyncOperation.belongsTo(User, { foreignKey: 'actorId', as: 'actor' });
+
+WorkOrder.hasMany(WorkOrderConflict, { foreignKey: 'workOrderId', as: 'conflicts', onDelete: 'CASCADE' });
+WorkOrderConflict.belongsTo(WorkOrder, { foreignKey: 'workOrderId', as: 'workOrder' });
+User.hasMany(WorkOrderConflict, { foreignKey: 'actorId', as: 'reportedConflicts', onDelete: 'SET NULL' });
+WorkOrderConflict.belongsTo(User, { foreignKey: 'actorId', as: 'actor' });
+
 const db = {
   sequelize,
   Sequelize,
@@ -91,6 +95,8 @@ const db = {
   WorkOrderNote,
   WorkOrderHistory,
   WorkOrderReading,
+  SyncOperation,
+  WorkOrderConflict,
 };
 
 export {
@@ -106,5 +112,8 @@ export {
   WorkOrderNote,
   WorkOrderHistory,
   WorkOrderReading,
+  SyncOperation,
+  WorkOrderConflict,
 };
+export type { SyncOperationState } from './syncOperation';
 export default db;

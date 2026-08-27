@@ -2,11 +2,9 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    // Drop any partial tables from previous failed attempt
     await queryInterface.sequelize.query('DROP TABLE IF EXISTS "work_order_checklists" CASCADE;');
     await queryInterface.sequelize.query('DROP TABLE IF EXISTS "work_orders" CASCADE;');
 
-    // 1. Create work_orders table
     await queryInterface.createTable('work_orders', {
       id: {
         type: Sequelize.UUID,

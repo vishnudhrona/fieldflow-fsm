@@ -1,5 +1,6 @@
 import { useState, useEffect, type FC } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { AlertCircle, CheckCircle2, UserCheck, Edit, Play, X, XCircle, RefreshCw } from 'lucide-react';
 import { Button, StatusBadge } from '../components/ui';
 import { SubpageHeader } from '../components/navigation';
@@ -13,29 +14,29 @@ import {
 import {
   updateWorkOrderStatus,
   toggleChecklistItem,
-  addWorkOrderNote,
   addWorkOrderReading,
+  addWorkOrderNote,
   type WorkOrder,
   type WorkOrderStatus,
-  type WorkOrderNoteItem,
-  type WorkOrderReadingItem,
 } from '../services/workOrderService';
-import { type WorkOrderAttachment } from '../services/db';
+import { localDb, type WorkOrderAttachment } from '../services/db';
 import { syncEngine } from '../services/syncEngine';
-import { useAuth } from '../context/AuthContext';
 import { useSync } from '../context/SyncContext';
 import { photoSyncEngine } from '../services/photoSyncEngine';
 import { Can } from '../components/auth';
 import { UserRole } from '../services/authService';
+import { useNetwork } from '../context/NetworkContext';
+import { useAuth } from '../context/AuthContext';
 
 export const WorkOrderDetailsPage: FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const { isOnline } = useNetwork();
   const { isSyncing, syncNow, mutations, queuePhoto, retryPhoto, photoPendingCount, deletePhoto } = useSync();
 
-  const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
+  const [workOrderState, setWorkOrderState] = useState<WorkOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -44,38 +45,74 @@ export const WorkOrderDetailsPage: FC = () => {
   const [metricValue, setMetricValue] = useState('');
   const [metricUnit, setMetricUnit] = useState('PSI');
 
-  const [attachments, setAttachments] = useState<WorkOrderAttachment[]>([]);
+  const [attachmentsState, setAttachmentsState] = useState<WorkOrderAttachment[]>([]);
   const [newNoteText, setNewNoteText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  const liveWorkOrder = useLiveQuery(() => (id ? localDb.workOrders.get(id) : undefined), [id]);
+  const liveAttachments = useLiveQuery(
+    () => (id ? localDb.attachments.where('workOrderId').equals(id).toArray() : []),
+    [id]
+  );
+
+  const workOrder = liveWorkOrder || workOrderState;
+  const attachments = (liveAttachments && liveAttachments.length > 0 ? liveAttachments : attachmentsState)
+    .slice()
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  const setWorkOrder = (updater: WorkOrder | null | ((prev: WorkOrder | null) => WorkOrder | null)) => {
+    setWorkOrderState(updater);
+  };
+  const setAttachments = (updater: WorkOrderAttachment[] | ((prev: WorkOrderAttachment[]) => WorkOrderAttachment[])) => {
+    setAttachmentsState(updater);
+  };
+
   const pendingNotes = mutations.filter((m) => m.workOrderId === id && m.actionType === 'ADD_NOTE');
   const pendingReadings = mutations.filter((m) => m.workOrderId === id && m.actionType === 'ADD_READING');
-  const hasNoteError = pendingNotes.some((m) => m.status === 'FAILED');
-  const hasReadingError = pendingReadings.some((m) => m.status === 'FAILED');
-  const totalWorkOrderFailed = mutations.some((m) => m.workOrderId === id && m.status === 'FAILED');
+  const hasNoteError = pendingNotes.some((m) => m.status === 'RETRY' || m.status === 'CONFLICT');
+  const hasReadingError = pendingReadings.some((m) => m.status === 'RETRY' || m.status === 'CONFLICT');
+  const totalWorkOrderFailed = mutations.some(
+    (m) => m.workOrderId === id && (m.status === 'RETRY' || m.status === 'CONFLICT')
+  );
 
   useEffect(() => {
     if (!id) return;
-
+    setIsLoading(true);
     let isMounted = true;
+
     const loadData = async () => {
       const cached = await syncEngine.getCachedWorkOrderById(id);
       if (cached && isMounted) {
         setWorkOrder(cached);
-        setIsLoading(false);
       }
 
-      try {
-        const fresh = await syncEngine.getWorkOrderById(id);
-        if (fresh && isMounted) {
-          setWorkOrder(fresh);
+      if (isOnline) {
+        try {
+          const fresh = await syncEngine.getWorkOrderById(id);
+          if (fresh && isMounted) {
+            setWorkOrder(fresh);
+            if (fresh.attachments && fresh.attachments.length > 0) {
+              await photoSyncEngine.syncServerAttachments(id, fresh.attachments);
+            }
+            const photoList = await photoSyncEngine.getPhotosForWorkOrder(id, fresh.attachments);
+            if (isMounted) {
+              setAttachments(photoList);
+            }
+          }
+        } catch (err: any) {
+          if (!cached && isMounted) {
+            setErrorMessage(err?.message || 'Failed to load work order details.');
+          }
+        } finally {
+          if (isMounted) setIsLoading(false);
         }
-      } catch (err: any) {
-        if (!cached && isMounted) {
-          setErrorMessage(err?.message || 'Failed to load work order details.');
+      } else {
+        if (isMounted) {
+          if (!cached) {
+            setErrorMessage('Work order not found in offline storage');
+          }
+          setIsLoading(false);
         }
-      } finally {
-        if (isMounted) setIsLoading(false);
       }
     };
 
@@ -83,7 +120,7 @@ export const WorkOrderDetailsPage: FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, isOnline]);
 
   useEffect(() => {
     if (!id) return;
@@ -92,33 +129,58 @@ export const WorkOrderDetailsPage: FC = () => {
       setAttachments(list);
     };
     fetchPhotos();
-  }, [id, isSyncing, photoPendingCount, workOrder?.attachments]);
+  }, [id, photoPendingCount, isOnline, workOrder?.attachments?.length]);
+
+  useEffect(() => {
+    if (!id) return;
+    const handleUpdate = () => {
+      syncEngine.getCachedWorkOrderById(id).then((cached) => {
+        if (cached) setWorkOrder(cached);
+      });
+    };
+
+    window.addEventListener('fsm:sync_completed', handleUpdate);
+    window.addEventListener('fsm:photo_queue_updated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('fsm:sync_completed', handleUpdate);
+      window.removeEventListener('fsm:photo_queue_updated', handleUpdate);
+    };
+  }, [id]);
 
   const handleToggleChecklist = async (checklistId: string, currentStatus: boolean) => {
-    if (!id || !workOrder) return;
+    if (!id || !workOrder || isUpdatingStatus) return;
+    if (workOrder.status === 'CANCELLED') return;
     const newStatus = !currentStatus;
 
     setWorkOrder((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
+        _syncStatus: 'PENDING_SYNC',
         checklistItems: prev.checklistItems?.map((item) =>
           item.id === checklistId
             ? { ...item, isCompleted: newStatus, completedAt: newStatus ? new Date().toISOString() : null }
-            : item,
+            : item
         ),
       };
     });
 
-    await toggleChecklistItem(id, checklistId, newStatus);
+    try {
+      await toggleChecklistItem(id, checklistId, newStatus);
+    } catch (err: any) {
+      console.error('Failed to toggle checklist item:', err);
+    }
   };
 
   const handleAddReading = async () => {
-    if (!id || !metricName.trim() || !metricValue.trim()) return;
+    if (!id || !workOrder || isUpdatingStatus) return;
+    if (workOrder.status === 'CANCELLED') return;
+    if (!metricName.trim() || !metricValue.trim()) return;
 
     const metric = metricName.trim();
     const value = metricValue.trim();
-    const unit = metricUnit.trim();
+    const unit = metricUnit.trim() || 'PSI';
 
     setMetricName('');
     setMetricValue('');
@@ -126,28 +188,29 @@ export const WorkOrderDetailsPage: FC = () => {
     const authorId = user?.id ? String(user.id) : undefined;
     const authorName = user?.name || 'Technician';
 
-    const saved = await addWorkOrderReading(id, metric, value, unit, {
-      id: authorId,
-      name: authorName,
-    });
-
-    const newReadingItem: WorkOrderReadingItem = {
-      id: saved.id,
+    const optimisticReading = {
+      id: `read-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       workOrderId: id,
       userId: authorId || null,
       metric,
       value,
       unit,
       recordedAt: new Date().toISOString(),
-      technician: {
-        id: authorId || '',
-        name: authorName,
-        email: user?.email || '',
-      },
+      technician: authorId ? { id: authorId, name: authorName, email: '' } : null,
       createdAt: new Date().toISOString(),
     };
 
-    setWorkOrder((prev) => (prev ? { ...prev, readings: [newReadingItem, ...(prev.readings || [])] } : prev));
+    // Instant optimistic UI update
+    setWorkOrder((prev) => (prev ? { ...prev, readings: [optimisticReading, ...(prev.readings || [])] } : prev));
+
+    try {
+      await addWorkOrderReading(id, metric, value, unit, {
+        id: authorId,
+        name: authorName,
+      });
+    } catch (err: any) {
+      console.error('Failed to add reading:', err);
+    }
   };
 
   const handleQueuePhoto = async (file: File) => {
@@ -163,7 +226,18 @@ export const WorkOrderDetailsPage: FC = () => {
   const handleDeletePhoto = async (photoId: string) => {
     if (!id) return;
     await deletePhoto(photoId);
-    setAttachments((prev) => prev.filter((a) => a.id !== photoId));
+    setAttachments((prev) =>
+      prev.filter((a) => a.id !== photoId && a.serverAttachmentId !== photoId && `srv-${a.serverAttachmentId}` !== photoId)
+    );
+    setWorkOrder((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        attachments: prev.attachments?.filter(
+          (a: any) => a.id !== photoId && `srv-${a.id}` !== photoId
+        ),
+      };
+    });
   };
 
   const handleRetryPhoto = async (photoId: string) => {
@@ -172,36 +246,41 @@ export const WorkOrderDetailsPage: FC = () => {
   };
 
   const handleAddNote = async () => {
-    if (!id || !newNoteText.trim()) return;
-    const text = newNoteText.trim();
+    if (!id || !workOrder || isUpdatingStatus) return;
+    if (workOrder.status === 'CANCELLED') return;
+    if (!newNoteText.trim()) return;
+
+    const content = newNoteText.trim();
     setNewNoteText('');
 
     const authorId = user?.id ? String(user.id) : undefined;
     const authorName = user?.name || 'User';
+    const authorEmail = user?.email || '';
+    const authorRole = (user?.role as any) || 'TECHNICIAN';
 
-    const saved = await addWorkOrderNote(id, text, { id: authorId || '', name: authorName });
+    const optimisticNote = {
+      id: `note-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      workOrderId: id,
+      userId: authorId || null,
+      content,
+      type: 'NOTE' as const,
+      user: authorId ? { id: authorId, name: authorName, email: authorEmail, role: authorRole } : null,
+      createdAt: new Date().toISOString(),
+    };
 
-    setWorkOrder((prev) => {
-      if (!prev) return prev;
-      const newNoteItem: WorkOrderNoteItem = {
-        id: saved.id,
-        workOrderId: id,
-        userId: authorId || null,
-        content: text,
-        type: 'NOTE',
-        createdAt: new Date().toISOString(),
-        user: {
-          id: authorId || '',
-          name: authorName,
-          email: user?.email || '',
-          role: (user?.role as any) || 'ADMIN_DISPATCHER',
-        },
-      };
-      return {
-        ...prev,
-        notes: [newNoteItem, ...(prev.notes || [])],
-      };
-    });
+    // Instant optimistic UI update
+    setWorkOrder((prev) => (prev ? { ...prev, notes: [optimisticNote, ...(prev.notes || [])] } : prev));
+
+    try {
+      await addWorkOrderNote(id, content, {
+        id: authorId,
+        name: authorName,
+        email: authorEmail,
+        role: authorRole,
+      });
+    } catch (err: any) {
+      console.error('Failed to add note:', err);
+    }
   };
 
   const handleStatusTransition = async (targetStatus: WorkOrderStatus) => {
@@ -277,31 +356,6 @@ export const WorkOrderDetailsPage: FC = () => {
           </div>
         )}
 
-        {!isSyncing && totalWorkOrderFailed && (
-          <div className='flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 shadow-2xs'>
-            <div className='flex items-center gap-3'>
-              <div className='w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700 shrink-0'>
-                <AlertCircle className='w-4 h-4 text-rose-600' />
-              </div>
-              <div>
-                <h4 className='text-xs font-black text-rose-950'>Offline Sync Incomplete</h4>
-                <p className='text-[11px] text-rose-800 font-medium'>
-                  Some changes could not be saved to the cloud database.
-                </p>
-              </div>
-            </div>
-            <Button
-              size='sm'
-              variant='danger'
-              onClick={syncNow}
-              className='py-2 px-3 text-xs font-bold shrink-0 shadow-xs'
-              leftIcon={<RefreshCw className='w-3.5 h-3.5' />}
-            >
-              Retry Sync
-            </Button>
-          </div>
-        )}
-
         <div className='flex md:hidden items-center justify-between gap-2 flex-wrap pb-1'>
           <div className='flex items-center gap-2 flex-wrap'>
             <StatusBadge status={workOrder.status} size='sm' rounded='full' />
@@ -315,6 +369,20 @@ export const WorkOrderDetailsPage: FC = () => {
             </span>
           )}
         </div>
+
+        {workOrder.status === 'CANCELLED' && (
+          <div className='flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 shadow-2xs'>
+            <div className='w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 shrink-0 shadow-2xs'>
+              <XCircle className='w-4 h-4 stroke-[2.5]' />
+            </div>
+            <div className='flex-1 min-w-0'>
+              <h3 className='text-xs sm:text-sm font-extrabold text-rose-950'>Work Order Cancelled</h3>
+              <p className='text-[11px] sm:text-xs text-rose-700 font-medium truncate'>
+                This work order was cancelled by dispatch. No further work can be recorded.
+              </p>
+            </div>
+          </div>
+        )}
 
         {workOrder.status === 'COMPLETED' && (
           <div className='flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 shadow-2xs'>
@@ -512,7 +580,11 @@ export const WorkOrderDetailsPage: FC = () => {
 
         <div className='grid grid-cols-1 lg:grid-cols-12 gap-5 items-start'>
           <div className='lg:col-span-6 space-y-5'>
-            <ServiceChecklistCard checklistItems={workOrder?.checklistItems} onToggleItem={handleToggleChecklist} />
+            <ServiceChecklistCard
+              checklistItems={workOrder?.checklistItems}
+              onToggleItem={handleToggleChecklist}
+              disabled={workOrder.status === 'CANCELLED'}
+            />
             <ServiceReadingsCard
               readings={workOrder?.readings}
               metricName={metricName}
@@ -522,6 +594,7 @@ export const WorkOrderDetailsPage: FC = () => {
               onMetricValueChange={setMetricValue}
               onMetricUnitChange={setMetricUnit}
               onAddReading={handleAddReading}
+              disabled={workOrder.status === 'CANCELLED'}
               isSyncing={isSyncing && pendingReadings.length > 0}
               pendingCount={pendingReadings.length}
               hasSyncError={hasReadingError}
@@ -536,6 +609,7 @@ export const WorkOrderDetailsPage: FC = () => {
               onDeletePhoto={handleDeletePhoto}
               onRetryPhoto={handleRetryPhoto}
               onPreviewPhoto={(url) => setSelectedImage(url)}
+              disabled={workOrder.status === 'CANCELLED' || user?.role === UserRole.ADMIN_DISPATCHER}
             />
 
             <FieldNotesCard
@@ -543,6 +617,7 @@ export const WorkOrderDetailsPage: FC = () => {
               newNoteText={newNoteText}
               onNoteTextChange={setNewNoteText}
               onAddNote={handleAddNote}
+              disabled={workOrder.status === 'CANCELLED'}
               isSyncing={isSyncing && pendingNotes.length > 0}
               pendingCount={pendingNotes.length}
               hasSyncError={hasNoteError}

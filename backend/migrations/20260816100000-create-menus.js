@@ -51,7 +51,6 @@ module.exports = {
       },
     });
 
-    // Seed the hardcoded menu items
     const now = new Date();
     await queryInterface.bulkInsert('menus', [
       {

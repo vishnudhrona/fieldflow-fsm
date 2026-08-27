@@ -1,10 +1,5 @@
 import { createContext, useContext, useState, useMemo, type ReactNode, type FC } from 'react';
-import {
-  authService,
-  UserRole,
-  type LoginCredentials,
-  type AuthResponse,
-} from '../services/authService';
+import { authService, UserRole, type LoginCredentials, type AuthResponse } from '../services/authService';
 
 export interface AuthContextType {
   user: AuthResponse['user'] | null;
@@ -49,8 +44,8 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    authService.logout();
+  const logout = async () => {
+    await authService.logout();
     setUser(null);
   };
 
@@ -75,7 +70,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
       isTechnician,
       hasRole,
     }),
-    [user, isLoading, isAuthenticated, isAdmin, isTechnician]
+    [user, isLoading, isAuthenticated, isAdmin, isTechnician],
   );
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

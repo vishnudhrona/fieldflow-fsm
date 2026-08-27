@@ -8,14 +8,15 @@ interface SequelizeConfigOptions extends Options {
 }
 
 const baseConfig: SequelizeConfigOptions = {
-  use_env_variable: 'DATABASE_URL',
+  username: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME || process.env.DB_DBNAME,
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
   dialect: 'postgres',
   logging: process.env.NODE_ENV === 'production' ? false : (query: string) => console.log(query),
   dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false,
-    },
+    ssl: false,
   },
 };
 

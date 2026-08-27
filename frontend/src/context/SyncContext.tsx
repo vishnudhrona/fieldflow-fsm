@@ -8,6 +8,7 @@ import { useNetwork } from './NetworkContext';
 export interface SyncContextType {
   pendingCount: number;
   photoPendingCount: number;
+  retryCount: number;
   conflictCount: number;
   totalPending: number;
   isSyncing: boolean;
@@ -30,30 +31,25 @@ export const SyncProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = useRef(false);
 
-  const mutations =
-    useLiveQuery(
-      () => localDb.outbox.orderBy('timestamp').reverse().toArray(),
-      [],
-      []
-    ) ?? [];
+  const mutations = useLiveQuery(() => localDb.outbox.orderBy('timestamp').reverse().toArray(), [], []) ?? [];
 
   const pendingAttachments =
     useLiveQuery(
       () => localDb.attachments.where('status').anyOf(['PENDING', 'UPLOADING', 'FAILED']).toArray(),
       [],
-      []
+      [],
     ) ?? [];
 
-  const activePendingMutations = mutations.filter((m) => m.status === 'PENDING');
-  const activePendingPhotos = pendingAttachments.filter((a) => a.status === 'PENDING');
+  const activePendingMutations = mutations.filter((m) => m.status === 'PENDING' || m.status === 'RETRY');
+  const activePendingPhotos = pendingAttachments.filter((a) => a.status === 'PENDING' || a.status === 'UPLOADING' || a.status === 'FAILED');
 
-  const pendingCount = activePendingMutations.length;
+  const pendingCount = mutations.filter((m) => m.status === 'PENDING').length;
+  const retryCount = mutations.filter((m) => m.status === 'RETRY').length;
   const conflictCount = mutations.filter((m) => m.status === 'CONFLICT').length;
-  const failedCount = mutations.filter((m) => m.status === 'FAILED').length;
   const photoPendingCount = activePendingPhotos.length;
 
-  const totalPending = pendingCount + photoPendingCount + conflictCount + failedCount;
-  const hasWorkToSync = pendingCount > 0 || photoPendingCount > 0;
+  const totalPending = activePendingMutations.length + photoPendingCount;
+  const hasWorkToSync = activePendingMutations.length > 0 || photoPendingCount > 0;
 
   const syncNow = useCallback(async () => {
     if (!isOnline || isSyncingRef.current) return;
@@ -99,6 +95,7 @@ export const SyncProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       value={{
         pendingCount,
         photoPendingCount,
+        retryCount,
         conflictCount,
         totalPending,
         isSyncing,
@@ -124,4 +121,3 @@ export function useSync() {
 }
 
 export default SyncContext;
-

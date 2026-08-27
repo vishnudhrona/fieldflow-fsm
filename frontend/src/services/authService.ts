@@ -1,8 +1,9 @@
 import api from './api';
+import { getTechnicianDbName, checkAndCleanupDbOnLogout } from './db';
 
 export enum UserRole {
   ADMIN_DISPATCHER = 'ADMIN_DISPATCHER',
-  TECHNICIAN = 'TECHNICIAN'
+  TECHNICIAN = 'TECHNICIAN',
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -47,15 +48,17 @@ export const authService = {
     }
     if (response.data.user) {
       localStorage.setItem('auth_user', JSON.stringify(response.data.user));
+      getTechnicianDbName(response.data.user.id);
     }
     return response.data;
   },
 
-  logout(): void {
+  async logout(): Promise<void> {
+    await checkAndCleanupDbOnLogout();
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
   },
-  
+
   isAuthenticated(): boolean {
     return !!localStorage.getItem('auth_token');
   },
@@ -63,7 +66,7 @@ export const authService = {
   async getTechnicians(): Promise<TechnicianUser[]> {
     const response = await api.get<{ technicians: TechnicianUser[]; total: number }>('/auth/technicians');
     return response.data.technicians;
-  }
+  },
 };
 
 export const getTechnicians = authService.getTechnicians;

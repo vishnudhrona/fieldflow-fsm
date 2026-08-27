@@ -1,25 +1,341 @@
 import api from './api';
-import {
-  localDb,
-  type OutboxMutation,
-  type MutationActionType,
-  type LocalWorkOrder,
-  type FieldNoteItem,
-  type ServiceReading,
-} from './db';
-import type { WorkOrder, WorkOrderNoteItem, WorkOrderReadingItem } from './workOrderService';
-import { photoSyncEngine } from './photoSyncEngine';
+import { localDb, type OutboxMutation, type MutationActionType, type LocalWorkOrder } from './db';
+import type { WorkOrder, WorkOrderReadingItem, WorkOrderNoteItem } from './workOrderService';
+import { isDeviceOnline } from '../utils';
 
 export class SyncEngine {
   private isSyncing = false;
 
   public isDeviceOnline(): boolean {
+    return isDeviceOnline();
+  }
+
+  async enqueueMutation(
+    workOrderId: string,
+    actionType: MutationActionType,
+    payload: Record<string, any>,
+    baseVersion?: number
+  ): Promise<OutboxMutation> {
+    const existingWo = await localDb.workOrders.get(workOrderId);
+    const resolvedVersion = baseVersion !== undefined ? baseVersion : existingWo?.version || 1;
+    const resolvedOrderNumber = existingWo?.orderNumber || payload.orderNumber;
+
+    const mutationId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `mut-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+    const mutation: OutboxMutation = {
+      mutationId,
+      workOrderId,
+      orderNumber: resolvedOrderNumber,
+      actionType,
+      payload,
+      baseVersion: resolvedVersion,
+      timestamp: Date.now(),
+      status: 'PENDING',
+      retryCount: 0,
+    };
+
+    let resultMutation: OutboxMutation = mutation;
+
+    await localDb.transaction('rw', [localDb.outbox, localDb.workOrders], async () => {
+      if (actionType === 'UPDATE_CHECKLIST' && payload.checklistId) {
+        const existing = await localDb.outbox
+          .where('workOrderId')
+          .equals(workOrderId)
+          .filter(
+            (m) =>
+              m.actionType === 'UPDATE_CHECKLIST' &&
+              m.payload?.checklistId === payload.checklistId &&
+              (m.status === 'PENDING' || m.status === 'RETRY')
+          )
+          .first();
+
+        if (existing) {
+          existing.payload = { ...existing.payload, ...payload };
+          existing.timestamp = Date.now();
+          existing.status = 'PENDING';
+          await localDb.outbox.put(existing);
+          resultMutation = existing;
+        } else {
+          await localDb.outbox.put(mutation);
+        }
+      } else {
+        await localDb.outbox.put(mutation);
+      }
+
+      const wo = await localDb.workOrders.get(workOrderId);
+      if (wo) {
+        if (actionType === 'UPDATE_STATUS' || actionType === 'COMPLETE_JOB') {
+          wo.status = payload.status;
+          wo._syncStatus = 'PENDING_SYNC';
+          wo.version = (wo.version || 1) + 1;
+          if (payload.status === 'COMPLETED') {
+            wo.completedAt = payload.completedAt || new Date().toISOString();
+          }
+        } else if (actionType === 'UPDATE_CHECKLIST' && payload.checklistId) {
+          if (wo.checklistItems) {
+            wo.checklistItems = wo.checklistItems.map((item) =>
+              item.id === payload.checklistId
+                ? {
+                    ...item,
+                    isCompleted: Boolean(payload.isCompleted),
+                    completedAt: payload.isCompleted ? (payload.completedAt || new Date().toISOString()) : null,
+                  }
+                : item
+            );
+          }
+          wo._syncStatus = 'PENDING_SYNC';
+        } else if (actionType === 'ADD_READING') {
+          const newReading: WorkOrderReadingItem = {
+            id: payload.id || `read-${Date.now()}`,
+            workOrderId,
+            userId: payload.userId || null,
+            technician: payload.technician || null,
+            metric: payload.metric,
+            value: payload.value,
+            unit: payload.unit,
+            recordedAt: payload.recordedAt || new Date().toISOString(),
+            createdAt: payload.recordedAt || new Date().toISOString(),
+          };
+          wo.readings = [newReading, ...(wo.readings || [])];
+          wo._syncStatus = 'PENDING_SYNC';
+        } else if (actionType === 'ADD_NOTE') {
+          const newNote: WorkOrderNoteItem = {
+            id: payload.id || `note-${Date.now()}`,
+            workOrderId,
+            userId: payload.userId || null,
+            content: payload.content,
+            type: payload.type || 'NOTE',
+            user: payload.user || null,
+            createdAt: payload.createdAt || new Date().toISOString(),
+          };
+          wo.notes = [newNote, ...(wo.notes || [])];
+          wo._syncStatus = 'PENDING_SYNC';
+        } else if (actionType === 'DELETE_ATTACHMENT' && (payload.attachmentId || payload.id)) {
+          const targetId = payload.attachmentId || payload.id;
+          if (wo.attachments) {
+            wo.attachments = wo.attachments.filter(
+              (a: any) => a.id !== targetId && a.serverAttachmentId !== targetId
+            );
+          }
+          wo._syncStatus = 'PENDING_SYNC';
+        }
+        await localDb.workOrders.put(wo);
+      }
+    });
+
+    if (this.isDeviceOnline()) {
+      this.processOutbox().catch(() => {});
+    }
+
+    return resultMutation;
+  }
+
+
+  async processOutbox(): Promise<{ synced: number; conflicts: number; retried: number }> {
+    if (this.isSyncing || !this.isDeviceOnline()) {
+      return { synced: 0, conflicts: 0, retried: 0 };
+    }
+
+    this.isSyncing = true;
+
     try {
-      const simulated = localStorage.getItem('fsm_simulated_network');
-      if (simulated === 'OFFLINE') return false;
-      return typeof navigator !== 'undefined' ? navigator.onLine : true;
-    } catch {
-      return true;
+      const pendingMutations = await localDb.outbox
+        .filter((m) => m.status === 'PENDING' || m.status === 'RETRY')
+        .toArray();
+      pendingMutations.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+      if (pendingMutations.length === 0) {
+        return { synced: 0, conflicts: 0, retried: 0 };
+      }
+
+      let responseData: { success?: boolean; message?: string; results?: any[] } | undefined;
+      try {
+        const idempotencyKey =
+          pendingMutations.length === 1
+            ? pendingMutations[0].mutationId
+            : typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `batch-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+        const res = await api.post<{ success: boolean; results: any[] }>(
+          '/sync/batch',
+          {
+            mutations: pendingMutations,
+          },
+          {
+            headers: {
+              'X-Idempotency-Key': idempotencyKey,
+            },
+          },
+        );
+        responseData = res.data;
+      } catch (err: any) {
+        if (err.response && err.response.data && err.response.data.results) {
+          responseData = err.response.data;
+        } else {
+          for (const m of pendingMutations) {
+            m.status = 'RETRY';
+            m.retryCount = (m.retryCount || 0) + 1;
+            m.errorMessage = err?.message || 'Network error';
+            await localDb.outbox.put(m);
+          }
+          return { synced: 0, conflicts: 0, retried: pendingMutations.length };
+        }
+      }
+
+      if (!responseData || responseData.success !== true || !Array.isArray(responseData.results)) {
+        for (const m of pendingMutations) {
+          m.status = 'RETRY';
+          m.retryCount = (m.retryCount || 0) + 1;
+          m.errorMessage = responseData?.message || 'Sync failed: unexpected server response';
+          await localDb.outbox.put(m);
+        }
+        return { synced: 0, conflicts: 0, retried: pendingMutations.length };
+      }
+
+      const serverResults = responseData.results;
+      let syncedCount = 0;
+      let conflictCount = 0;
+      let retriedCount = 0;
+
+      for (const result of serverResults) {
+        const mutation = pendingMutations.find((m) => m.mutationId === result.mutationId);
+        if (!mutation) continue;
+
+        if (result.status === 'SYNCED') {
+          await localDb.outbox.delete(mutation.mutationId);
+          syncedCount++;
+
+          const wo = await localDb.workOrders.get(mutation.workOrderId);
+          if (wo) {
+            wo._syncStatus = 'SYNCED';
+            if (result.currentVersion) {
+              wo.version = result.currentVersion;
+            }
+            await localDb.workOrders.put(wo);
+          }
+        } else if (result.status === 'CONFLICT') {
+          mutation.status = 'CONFLICT';
+          mutation.errorMessage =
+            result.errorMessage || 'Server conflict: Work order was modified by another user';
+          await localDb.outbox.put(mutation);
+          conflictCount++;
+
+          const wo = await localDb.workOrders.get(mutation.workOrderId);
+          if (wo) {
+            const updatedWo = result.serverData
+              ? { ...wo, ...result.serverData, _syncStatus: 'SYNCED' as const, _cachedAt: Date.now() }
+              : { ...wo, _syncStatus: 'CONFLICT' as const };
+            await localDb.workOrders.put(updatedWo);
+          }
+        } else {
+          mutation.status = 'RETRY';
+          mutation.errorMessage = result.errorMessage || 'Synchronization failed';
+          mutation.retryCount = (mutation.retryCount || 0) + 1;
+          await localDb.outbox.put(mutation);
+          retriedCount++;
+        }
+      }
+
+      for (const m of pendingMutations) {
+        if (!serverResults.some((r) => r.mutationId === m.mutationId)) {
+          m.status = 'RETRY';
+          m.retryCount = (m.retryCount || 0) + 1;
+          m.errorMessage = 'No result returned from server for this mutation';
+          await localDb.outbox.put(m);
+          retriedCount++;
+        }
+      }
+
+      return { synced: syncedCount, conflicts: conflictCount, retried: retriedCount };
+    } catch (error) {
+      console.error('Error processing outbox:', error);
+      return { synced: 0, conflicts: 0, retried: 0 };
+    } finally {
+      this.isSyncing = false;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fsm:sync_completed'));
+      }
+    }
+  }
+
+  async getCachedWorkOrders(filters?: { search?: string; status?: string }): Promise<LocalWorkOrder[]> {
+    let results = await localDb.workOrders.toArray();
+
+    if (filters?.status) {
+      results = results.filter((o) => o.status === filters.status);
+    }
+
+    if (filters?.search && filters.search.trim()) {
+      const term = filters.search.trim().toLowerCase();
+      results = results.filter(
+        (o) =>
+          o.orderNumber?.toLowerCase().includes(term) ||
+          o.title?.toLowerCase().includes(term) ||
+          o.customer?.name?.toLowerCase().includes(term) ||
+          o.asset?.machineName?.toLowerCase().includes(term) ||
+          o.technician?.name?.toLowerCase().includes(term)
+      );
+    }
+
+    results.sort((a, b) => {
+      const dateA = a.scheduledDate || a.createdAt || '';
+      const dateB = b.scheduledDate || b.createdAt || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    return results;
+  }
+
+  async getCachedWorkOrderById(id: string): Promise<LocalWorkOrder | null> {
+    return (await localDb.workOrders.get(id)) || null;
+  }
+
+  async getWorkOrderById(id: string): Promise<WorkOrder> {
+    if (!this.isDeviceOnline()) {
+      const cached = await this.getCachedWorkOrderById(id);
+      if (cached) return cached;
+      throw new Error('Work order not found in offline storage');
+    }
+
+    try {
+      const response = await api.get<{ workOrder: WorkOrder }>(`/work-orders/${id}`);
+      const order = response.data.workOrder;
+
+      const existing = await localDb.workOrders.get(id);
+      if (existing && (existing._syncStatus === 'PENDING_SYNC' || existing._syncStatus === 'CONFLICT')) {
+        const merged: LocalWorkOrder = {
+          ...order,
+          ...existing,
+          title: order.title,
+          customer: order.customer || existing.customer,
+          asset: order.asset || existing.asset,
+          technician: order.technician || existing.technician,
+          notes: existing.notes && existing.notes.length > 0 ? existing.notes : order.notes,
+          readings: existing.readings && existing.readings.length > 0 ? existing.readings : order.readings,
+          checklistItems: existing.checklistItems && existing.checklistItems.length > 0 ? existing.checklistItems : order.checklistItems,
+          attachments: existing.attachments && existing.attachments.length > 0 ? existing.attachments : order.attachments,
+          _syncStatus: existing._syncStatus,
+          _cachedAt: Date.now(),
+        };
+        await localDb.workOrders.put(merged);
+        return merged;
+      }
+
+      await localDb.workOrders.put({
+        ...order,
+        _syncStatus: 'SYNCED',
+        _cachedAt: Date.now(),
+      });
+
+      return order;
+    } catch (error) {
+      const cached = await this.getCachedWorkOrderById(id);
+      if (cached) return cached;
+      throw error;
     }
   }
 
@@ -45,11 +361,30 @@ export class SyncEngine {
 
       await localDb.transaction('rw', [localDb.workOrders, localDb.syncMeta], async () => {
         for (const wo of workOrders) {
-          await localDb.workOrders.put({
-            ...wo,
-            _syncStatus: 'SYNCED',
-            _cachedAt: Date.now(),
-          });
+          const existing = await localDb.workOrders.get(wo.id);
+          if (existing && (existing._syncStatus === 'PENDING_SYNC' || existing._syncStatus === 'CONFLICT')) {
+            await localDb.workOrders.put({
+              ...wo,
+              ...existing,
+              title: wo.title,
+              customer: wo.customer || existing.customer,
+              asset: wo.asset || existing.asset,
+              technician: wo.technician || existing.technician,
+              scheduledDate: wo.scheduledDate || existing.scheduledDate,
+              notes: existing.notes && existing.notes.length > 0 ? existing.notes : wo.notes,
+              readings: existing.readings && existing.readings.length > 0 ? existing.readings : wo.readings,
+              checklistItems: existing.checklistItems && existing.checklistItems.length > 0 ? existing.checklistItems : wo.checklistItems,
+              attachments: existing.attachments && existing.attachments.length > 0 ? existing.attachments : wo.attachments,
+              _syncStatus: existing._syncStatus,
+              _cachedAt: Date.now(),
+            });
+          } else {
+            await localDb.workOrders.put({
+              ...wo,
+              _syncStatus: 'SYNCED',
+              _cachedAt: Date.now(),
+            });
+          }
         }
 
         await localDb.syncMeta.put({
@@ -62,341 +397,11 @@ export class SyncEngine {
       });
 
       return workOrders;
-    } catch (err: any) {
+    } catch {
       return await this.getCachedWorkOrders(filters);
     }
   }
 
-  async getCachedWorkOrders(filters?: { search?: string; status?: string }): Promise<LocalWorkOrder[]> {
-    let results = await localDb.workOrders.toArray();
-
-    if (filters?.status) {
-      results = results.filter((o) => o.status === filters.status);
-    }
-
-    if (filters?.search && filters.search.trim()) {
-      const term = filters.search.trim().toLowerCase();
-      results = results.filter(
-        (o) =>
-          o.orderNumber?.toLowerCase().includes(term) ||
-          o.title?.toLowerCase().includes(term) ||
-          o.customer?.name?.toLowerCase().includes(term) ||
-          o.asset?.machineName?.toLowerCase().includes(term) ||
-          o.technician?.name?.toLowerCase().includes(term),
-      );
-    }
-
-    results.sort((a, b) => {
-      const dateA = a.scheduledDate || a.createdAt || '';
-      const dateB = b.scheduledDate || b.createdAt || '';
-      return dateB.localeCompare(dateA);
-    });
-
-    return results;
-  }
-
-  async getCachedWorkOrderById(id: string): Promise<LocalWorkOrder | null> {
-    return (await localDb.workOrders.get(id)) || null;
-  }
-
-  async getWorkOrderById(id: string): Promise<WorkOrder> {
-    if (!this.isDeviceOnline()) {
-      const cached = await this.getCachedWorkOrderById(id);
-      if (cached) return cached;
-      throw new Error('Work order not found in offline storage');
-    }
-
-    try {
-      // Background outbox sync (non-blocking for fast page load)
-      this.processOutbox().catch(() => {});
-
-      const response = await api.get<{ workOrder: WorkOrder }>(`/work-orders/${id}`);
-      const order = response.data.workOrder;
-
-      await localDb.workOrders.put({
-        ...order,
-        _syncStatus: 'SYNCED',
-        _cachedAt: Date.now(),
-      });
-
-      if (order.attachments && order.attachments.length > 0) {
-        photoSyncEngine.syncServerAttachments(id, order.attachments).catch(() => {});
-      }
-
-      return order;
-    } catch (error) {
-      const cached = await this.getCachedWorkOrderById(id);
-      if (cached) return cached;
-      throw error;
-    }
-  }
-
-  async addNote(
-    workOrderId: string,
-    content: string,
-    user: { id: string | number; name: string },
-    type: 'NOTE' | 'SYSTEM' = 'NOTE',
-  ): Promise<FieldNoteItem> {
-    const noteId =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
-    const timeFormatted = new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-
-    const newNote: FieldNoteItem = {
-      id: noteId,
-      workOrderId,
-      userId: String(user?.id),
-      authorName: user?.name,
-      type,
-      content: content.trim(),
-      timestamp: timeFormatted,
-      createdAt: Date.now(),
-    };
-
-    const existingWo = await localDb.workOrders.get(workOrderId);
-    if (existingWo) {
-      const noteItem: WorkOrderNoteItem = {
-        id: noteId,
-        workOrderId,
-        userId: String(user?.id),
-        content: newNote.content,
-        type,
-        user: {
-          id: String(user?.id),
-          name: user?.name || 'Technician',
-          email: '',
-          role: 'TECHNICIAN',
-        },
-        createdAt: new Date().toISOString(),
-      };
-      existingWo.notes = [noteItem, ...(existingWo.notes || [])];
-      existingWo._syncStatus = 'PENDING_SYNC';
-      await localDb.workOrders.put(existingWo);
-    }
-
-    await this.enqueueMutation(workOrderId, 'ADD_NOTE', {
-      id: noteId,
-      content: newNote.content,
-      userId: String(user.id),
-      type,
-    });
-
-    return newNote;
-  }
-
-  async addReading(
-    workOrderId: string,
-    metric: string,
-    value: string,
-    unit: string,
-    user?: { id?: string | number; name?: string },
-  ): Promise<ServiceReading> {
-    const readingId =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
-    const timeFormatted = new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-
-    const newReading: ServiceReading = {
-      id: readingId,
-      workOrderId,
-      metric: metric.trim(),
-      value: value.trim(),
-      unit: unit.trim(),
-      timestamp: timeFormatted,
-      isLocal: true,
-    };
-
-    const existingWo = await localDb.workOrders.get(workOrderId);
-    if (existingWo) {
-      const readingItem: WorkOrderReadingItem = {
-        id: readingId,
-        workOrderId,
-        userId: user?.id ? String(user.id) : null,
-        metric: newReading.metric,
-        value: newReading.value,
-        unit: newReading.unit,
-        recordedAt: new Date().toISOString(),
-        technician: {
-          id: user?.id ? String(user.id) : '',
-          name: user?.name || 'Technician',
-          email: '',
-        },
-        createdAt: new Date().toISOString(),
-      };
-      existingWo.readings = [readingItem, ...(existingWo.readings || [])];
-      existingWo._syncStatus = 'PENDING_SYNC';
-      await localDb.workOrders.put(existingWo);
-    }
-
-    await this.enqueueMutation(workOrderId, 'ADD_READING', {
-      id: readingId,
-      metric: newReading.metric,
-      value: newReading.value,
-      unit: newReading.unit,
-      userId: user?.id ? String(user.id) : undefined,
-      recordedAt: new Date().toISOString(),
-    });
-
-    return newReading;
-  }
-
-  async enqueueMutation(
-    workOrderId: string,
-    actionType: MutationActionType,
-    payload: Record<string, any>,
-    baseVersion?: number,
-  ): Promise<OutboxMutation> {
-    const existingWo = await localDb.workOrders.get(workOrderId);
-    const resolvedVersion = baseVersion !== undefined ? baseVersion : existingWo?.version || 1;
-    const resolvedOrderNumber = existingWo?.orderNumber || payload.orderNumber;
-
-    const mutationId = `mut-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const mutation: OutboxMutation = {
-      mutationId,
-      workOrderId,
-      orderNumber: resolvedOrderNumber,
-      actionType,
-      payload,
-      baseVersion: resolvedVersion,
-      timestamp: Date.now(),
-      status: 'PENDING',
-      retryCount: 0,
-    };
-
-    await localDb.transaction('rw', [localDb.outbox, localDb.workOrders], async () => {
-      await localDb.outbox.put(mutation);
-
-      const wo = await localDb.workOrders.get(workOrderId);
-      if (wo) {
-        if (actionType === 'UPDATE_STATUS') {
-          wo.status = payload.status;
-          wo._syncStatus = 'PENDING_SYNC';
-          if (payload.status === 'COMPLETED') {
-            wo.completedAt = new Date().toISOString();
-          }
-        } else if (actionType === 'COMPLETE_JOB') {
-          wo.status = 'COMPLETED';
-          wo.completedAt = payload.completedAt || new Date().toISOString();
-          wo._syncStatus = 'PENDING_SYNC';
-        } else if (actionType === 'UPDATE_CHECKLIST') {
-          if (wo.checklistItems) {
-            const item = wo.checklistItems.find((c) => c.id === payload.checklistId);
-            if (item) {
-              item.isCompleted = Boolean(payload.isCompleted);
-              item.completedAt = payload.isCompleted ? new Date().toISOString() : null;
-            }
-          }
-        }
-        await localDb.workOrders.put(wo);
-      }
-    });
-
-    if (this.isDeviceOnline()) {
-      this.processOutbox().catch(() => {});
-    }
-
-    return mutation;
-  }
-
-  async processOutbox(): Promise<{ synced: number; conflicts: number; failed: number }> {
-    if (this.isSyncing || !this.isDeviceOnline()) {
-      return { synced: 0, conflicts: 0, failed: 0 };
-    }
-
-    this.isSyncing = true;
-
-    try {
-      const pendingMutations = await localDb.outbox.filter((m) => m.status === 'PENDING').toArray();
-      pendingMutations.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-
-      if (pendingMutations.length === 0) {
-        return { synced: 0, conflicts: 0, failed: 0 };
-      }
-
-      for (const m of pendingMutations) {
-        m.status = 'SYNCING';
-        await localDb.outbox.put(m);
-      }
-
-      let responseData: any;
-      try {
-        const res = await api.post<{ success: boolean; results: any[] }>('/sync/batch', {
-          mutations: pendingMutations,
-        });
-        responseData = res.data;
-      } catch (err: any) {
-        if (err.response && err.response.data && err.response.data.results) {
-          responseData = err.response.data;
-        } else {
-          for (const m of pendingMutations) {
-            m.status = 'FAILED';
-            m.retryCount += 1;
-            m.errorMessage = err?.message || 'Network disconnected';
-            await localDb.outbox.put(m);
-          }
-          return { synced: 0, conflicts: 0, failed: pendingMutations.length };
-        }
-      }
-
-      let syncedCount = 0;
-      let conflictCount = 0;
-      let failedCount = 0;
-
-      const serverResults = responseData?.results || [];
-
-      for (const result of serverResults) {
-        const mutation = pendingMutations.find((m) => m.mutationId === result.mutationId);
-        if (!mutation) continue;
-
-        if (result.status === 'SYNCED') {
-          await localDb.outbox.delete(mutation.mutationId);
-          syncedCount++;
-
-          const wo = await localDb.workOrders.get(mutation.workOrderId);
-          if (wo) {
-            wo._syncStatus = 'SYNCED';
-            if (result.currentVersion) {
-              wo.version = result.currentVersion;
-            }
-            await localDb.workOrders.put(wo);
-          }
-        } else if (result.status === 'CONFLICT') {
-          mutation.status = 'CONFLICT';
-          mutation.errorMessage =
-            result.errorMessage || 'Server conflict: Work order was modified by another user while offline';
-          await localDb.outbox.put(mutation);
-          conflictCount++;
-        } else {
-          mutation.status = 'FAILED';
-          mutation.errorMessage = result.errorMessage || 'Server rejected mutation';
-          mutation.retryCount += 1;
-          await localDb.outbox.put(mutation);
-          failedCount++;
-        }
-      }
-
-      return { synced: syncedCount, conflicts: conflictCount, failed: failedCount };
-    } finally {
-      this.isSyncing = false;
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('fsm:sync_completed'));
-      }
-    }
-  }
-
-  async getAllMutations(): Promise<OutboxMutation[]> {
-    return await localDb.outbox.orderBy('timestamp').reverse().toArray();
-  }
   async retryMutation(mutationId: string): Promise<void> {
     const mutation = await localDb.outbox.get(mutationId);
     if (mutation) {
@@ -411,44 +416,6 @@ export class SyncEngine {
 
   async deleteMutation(mutationId: string): Promise<void> {
     await localDb.outbox.delete(mutationId);
-  }
-
-  async getOutboxStats(): Promise<{ pending: number; syncing: number; failed: number; total: number }> {
-    const mutations = await localDb.outbox.toArray();
-    return {
-      pending: mutations.filter((m) => m.status === 'PENDING').length,
-      syncing: mutations.filter((m) => m.status === 'SYNCING').length,
-      failed: mutations.filter((m) => m.status === 'FAILED').length,
-      total: mutations.length,
-    };
-  }
-
-  async getPendingCount(): Promise<number> {
-    return await localDb.outbox
-      .filter((m) => m.status === 'PENDING' || m.status === 'FAILED' || m.status === 'SYNCING')
-      .count();
-  }
-
-  async clearSynced(): Promise<void> {
-    const synced = await localDb.outbox.where('status').equals('SYNCED').toArray();
-    for (const s of synced) {
-      await localDb.outbox.delete(s.mutationId);
-    }
-  }
-
-  async syncAll(): Promise<{
-    outbox: { synced: number; conflicts: number; failed: number };
-    photos: { uploaded: number; failed: number };
-  }> {
-    const [outboxResult, photoResult] = await Promise.allSettled([
-      this.processOutbox(),
-      photoSyncEngine.processPhotoQueue(),
-    ]);
-
-    return {
-      outbox: outboxResult.status === 'fulfilled' ? outboxResult.value : { synced: 0, conflicts: 0, failed: 0 },
-      photos: photoResult.status === 'fulfilled' ? photoResult.value : { uploaded: 0, failed: 0 },
-    };
   }
 }
 

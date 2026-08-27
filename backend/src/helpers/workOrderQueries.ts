@@ -127,7 +127,12 @@ export const findAllWorkOrders = async (filters?: { search?: string; status?: st
   });
 };
 
-export const findWorkOrderById = async (id: string) => {
+export const findWorkOrderById = async (id: string, technicianId?: string | null) => {
+  const attachmentWhere: any = {};
+  if (technicianId) {
+    attachmentWhere.technicianId = technicianId;
+  }
+
   return await WorkOrder.findByPk(id, {
     include: [
       { model: Customer, as: 'customer', attributes: ['id', 'name', 'phone', 'address', 'contactPerson', 'email'] },
@@ -137,6 +142,8 @@ export const findWorkOrderById = async (id: string) => {
       {
         model: WorkOrderAttachment,
         as: 'attachments',
+        where: Object.keys(attachmentWhere).length > 0 ? attachmentWhere : undefined,
+        required: false,
         include: [{ model: User, as: 'technician', attributes: ['id', 'name', 'email'] }],
       },
       { model: WorkOrderNote, as: 'notes', include: [{ model: User, as: 'user' }] },
@@ -174,6 +181,7 @@ export const updateWorkOrderById = async (id: string, input: Partial<CreateWorkO
         priority: input.priority || workOrder.priority,
         scheduledDate: input.scheduledDate || workOrder.scheduledDate,
         scheduledTime: input.scheduledTime !== undefined ? input.scheduledTime : workOrder.scheduledTime,
+        version: (workOrder.version || 1) + 1,
       },
       { transaction: t },
     );

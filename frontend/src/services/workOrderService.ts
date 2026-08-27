@@ -1,6 +1,5 @@
 import api from './api';
 import { syncEngine } from './syncEngine';
-import { type FieldNoteItem, type ServiceReading } from './db';
 
 export type WorkOrderStatus = 'NEW' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type WorkOrderPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY';
@@ -55,7 +54,7 @@ export interface WorkOrder {
   readings?: WorkOrderReadingItem[];
   attachments?: WorkOrderAttachmentItem[];
   version?: number;
-  _syncStatus?: 'SYNCED' | 'PENDING_SYNC';
+  _syncStatus?: 'SYNCED' | 'PENDING_SYNC' | 'CONFLICT';
   createdAt: string;
   updatedAt: string;
 }
@@ -169,16 +168,49 @@ export const toggleChecklistItem = async (
   await syncEngine.enqueueMutation(workOrderId, 'UPDATE_CHECKLIST', {
     checklistId,
     isCompleted,
+    completedAt: isCompleted ? new Date().toISOString() : null,
   });
 };
 
 export const addWorkOrderNote = async (
   workOrderId: string,
   content: string,
-  user: { id: string | number; name: string },
+  user?: { id?: string | number; name?: string; email?: string; role?: 'ADMIN_DISPATCHER' | 'TECHNICIAN' },
   type: 'NOTE' | 'SYSTEM' = 'NOTE',
-): Promise<FieldNoteItem> => {
-  return await syncEngine.addNote(workOrderId, content, user, type);
+): Promise<WorkOrderNoteItem> => {
+  const noteId =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `note-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const createdAt = new Date().toISOString();
+
+  const noteItem: WorkOrderNoteItem = {
+    id: noteId,
+    workOrderId,
+    userId: user?.id ? String(user.id) : null,
+    content,
+    type,
+    user: user?.id
+      ? {
+          id: String(user.id),
+          name: user.name || 'User',
+          email: user.email || '',
+          role: user.role || 'TECHNICIAN',
+        }
+      : null,
+    createdAt,
+  };
+
+  await syncEngine.enqueueMutation(workOrderId, 'ADD_NOTE', {
+    id: noteId,
+    content,
+    type,
+    createdAt,
+    userId: user?.id ? String(user.id) : null,
+    user: noteItem.user,
+  });
+
+  return noteItem;
 };
 
 export const addWorkOrderReading = async (
@@ -187,6 +219,46 @@ export const addWorkOrderReading = async (
   value: string,
   unit: string,
   user?: { id?: string | number; name?: string },
-): Promise<ServiceReading> => {
-  return await syncEngine.addReading(workOrderId, metric, value, unit, user);
+): Promise<WorkOrderReadingItem> => {
+  const readingId =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `read-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const recordedAt = new Date().toISOString();
+
+  const readingItem: WorkOrderReadingItem = {
+    id: readingId,
+    workOrderId,
+    userId: user?.id ? String(user.id) : null,
+    metric,
+    value,
+    unit,
+    recordedAt,
+    technician: user?.id
+      ? {
+          id: String(user.id),
+          name: user.name || 'Technician',
+          email: '',
+        }
+      : null,
+    createdAt: recordedAt,
+  };
+
+  await syncEngine.enqueueMutation(workOrderId, 'ADD_READING', {
+    id: readingId,
+    metric,
+    value,
+    unit,
+    recordedAt,
+    userId: user?.id ? String(user.id) : null,
+    technician: user?.id
+      ? {
+          id: String(user.id),
+          name: user.name,
+          email: '',
+        }
+      : null,
+  });
+
+  return readingItem;
 };

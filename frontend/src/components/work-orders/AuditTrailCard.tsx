@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import { History, CheckCircle2, FileText, Image, Clock, ArrowRightCircle } from 'lucide-react';
 import type { WorkOrderHistoryItem } from '../../services/workOrderService';
 import type { AuditTrailItem } from '../../services/db';
+import { formatTimeStr } from '../../utils';
 
 export type HistoryDisplayItem = WorkOrderHistoryItem | AuditTrailItem;
 
@@ -64,13 +65,7 @@ export const AuditTrailCard: FC<AuditTrailCardProps> = ({ history = [], classNam
 
             const timeStr =
               ('time' in item && item.time) ||
-              ('createdAt' in item && item.createdAt
-                ? new Date(item.createdAt).toLocaleTimeString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true,
-                  })
-                : '');
+              ('createdAt' in item && item.createdAt ? formatTimeStr(item.createdAt) : '');
 
             return (
               <div key={item.id} className='flex items-start gap-2.5'>

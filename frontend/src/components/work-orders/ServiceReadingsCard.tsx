@@ -3,6 +3,7 @@ import { Activity, RefreshCw, AlertCircle, CloudOff } from 'lucide-react';
 import { Button, Input } from '../ui';
 import type { WorkOrderReadingItem } from '../../services/workOrderService';
 import type { ServiceReading } from '../../services/db';
+import { formatTimeStr } from '../../utils';
 
 export interface ServiceReadingsCardProps {
   readings?: (WorkOrderReadingItem | ServiceReading)[];
@@ -12,11 +13,12 @@ export interface ServiceReadingsCardProps {
   onMetricNameChange: (value: string) => void;
   onMetricValueChange: (value: string) => void;
   onMetricUnitChange: (value: string) => void;
-  onAddReading: () => void;
+  onAddReading?: () => void;
   isSyncing?: boolean;
   pendingCount?: number;
   hasSyncError?: boolean;
   onRetrySync?: () => void;
+  disabled?: boolean;
   className?: string;
 }
 
@@ -33,16 +35,13 @@ export const ServiceReadingsCard: FC<ServiceReadingsCardProps> = ({
   pendingCount = 0,
   hasSyncError = false,
   onRetrySync,
+  disabled = false,
   className = '',
 }) => {
   const formatTime = (r: WorkOrderReadingItem | ServiceReading): string => {
     if ('timestamp' in r && r.timestamp) return r.timestamp;
     if ('recordedAt' in r && r.recordedAt) {
-      return new Date(r.recordedAt).toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
+      return formatTimeStr(r.recordedAt);
     }
     return '';
   };
@@ -93,6 +92,7 @@ export const ServiceReadingsCard: FC<ServiceReadingsCardProps> = ({
             placeholder='e.g. Suction Pressure'
             value={metricName}
             onChange={(e) => onMetricNameChange(e.target.value)}
+            disabled={disabled}
           />
         </div>
 
@@ -102,6 +102,7 @@ export const ServiceReadingsCard: FC<ServiceReadingsCardProps> = ({
             placeholder='[45.2]'
             value={metricValue}
             onChange={(e) => onMetricValueChange(e.target.value)}
+            disabled={disabled}
           />
         </div>
 
@@ -111,6 +112,7 @@ export const ServiceReadingsCard: FC<ServiceReadingsCardProps> = ({
             placeholder='[PSI]'
             value={metricUnit}
             onChange={(e) => onMetricUnitChange(e.target.value)}
+            disabled={disabled}
           />
         </div>
 
@@ -118,8 +120,9 @@ export const ServiceReadingsCard: FC<ServiceReadingsCardProps> = ({
           <Button
             size='sm'
             fullWidth
-            onClick={onAddReading}
-            className='py-3 rounded-xl bg-[#D12026] hover:bg-[#B11A1F] text-white text-xs font-bold'
+            onClick={() => onAddReading?.()}
+            disabled={disabled || !metricName.trim() || !metricValue.trim()}
+            className='py-3 rounded-xl bg-[#D12026] hover:bg-[#B11A1F] text-white text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed'
           >
             + Log
           </Button>

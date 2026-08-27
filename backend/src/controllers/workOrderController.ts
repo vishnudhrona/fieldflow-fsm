@@ -87,7 +87,8 @@ export const getWorkOrders = async (req: AuthenticatedRequest, res: Response): P
 export const getWorkOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params as { id: string };
-    const workOrder = await findWorkOrderById(id);
+    const technicianId = req.user?.role === ROLES.TECHNICIAN ? req.user.id : null;
+    const workOrder = await findWorkOrderById(id, technicianId);
 
     if (!workOrder) {
       res.status(404).json({ message: 'Work order not found' });

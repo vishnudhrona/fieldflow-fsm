@@ -1,7 +1,16 @@
 import { useState, useEffect, useMemo, type FC } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserPlus, Edit, UserX, UserCheck } from 'lucide-react';
-import { Table, TableActionMenu, Button, SearchBar, StatusBadge, EntityCard, EmptyState, type Column } from '../components/ui';
+import {
+  Table,
+  TableActionMenu,
+  Button,
+  SearchBar,
+  StatusBadge,
+  EntityCard,
+  EmptyState,
+  type Column,
+} from '../components/ui';
 import { mapObjectValues } from '../utils';
 import { CUSTOMER_COLUMNS } from '../constants';
 import { useDebounce } from '../hooks';
@@ -15,8 +24,8 @@ export const CustomersPage: FC = () => {
 
   const fetchCustomers = async (searchQuery?: string) => {
     try {
-      const data = await getCustomers(searchQuery);   
-      console.log(19,data);
+      const data = await getCustomers(searchQuery);
+      console.log(19, data);
       const mapped: Customer[] = data.map((c) => ({
         id: c.id,
         name: c.name,

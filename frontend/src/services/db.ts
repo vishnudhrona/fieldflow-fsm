@@ -1,7 +1,9 @@
 import Dexie, { type Table } from 'dexie';
 import type { WorkOrder } from './workOrderService';
 
-export type MutationActionType = 'UPDATE_STATUS' | 'COMPLETE_JOB' | 'UPDATE_CHECKLIST' | 'ADD_NOTE' | 'ADD_READING';
+export type MutationActionType = 'UPDATE_STATUS' | 'COMPLETE_JOB' | 'UPDATE_CHECKLIST' | 'ADD_NOTE' | 'ADD_READING' | 'DELETE_ATTACHMENT';
+
+export type OutboxStatus = 'PENDING' | 'RETRY' | 'CONFLICT' | 'SYNCED';
 
 export interface OutboxMutation {
   mutationId: string;
@@ -11,13 +13,13 @@ export interface OutboxMutation {
   payload: Record<string, any>;
   baseVersion?: number;
   timestamp: number;
-  status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED' | 'CONFLICT';
+  status: OutboxStatus;
   retryCount: number;
   errorMessage?: string;
 }
 
 export interface LocalWorkOrder extends WorkOrder {
-  _syncStatus?: 'SYNCED' | 'PENDING_SYNC';
+  _syncStatus?: 'SYNCED' | 'PENDING_SYNC' | 'CONFLICT';
   _cachedAt?: number;
 }
 
@@ -53,16 +55,6 @@ export interface WorkOrderAttachment {
   createdAt: number;
 }
 
-export interface FieldNoteItem {
-  id: string;
-  workOrderId: string;
-  userId: string;
-  authorName: string;
-  type: 'NOTE' | 'SYSTEM';
-  content: string;
-  timestamp: string;
-  createdAt?: number;
-}
 
 export interface AuditTrailItem {
   id: string;
@@ -73,22 +65,82 @@ export interface AuditTrailItem {
   timestamp: number;
 }
 
+export const getTechnicianDbName = (technicianId?: string | number): string => {
+  if (technicianId) {
+    return `fieldflow_fsm_db_${technicianId}`;
+  }
+  try {
+    const storedUser = localStorage.getItem('auth_user');
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      if (user?.id) {
+        return `fieldflow_fsm_db_${user.id}`;
+      }
+    }
+  } catch {
+    // Ignore JSON parse errors
+  }
+  return 'fieldflow_fsm_db_default';
+};
+
 export class FieldFlowDatabase extends Dexie {
   workOrders!: Table<LocalWorkOrder, string>;
   attachments!: Table<WorkOrderAttachment, string>;
   outbox!: Table<OutboxMutation, string>;
   syncMeta!: Table<{ key: string; value: any }, string>;
 
-  constructor() {
-    super('fieldflow_fsm_db');
+  constructor(dbName = 'fieldflow_fsm_db_default') {
+    super(dbName);
     this.version(4).stores({
       workOrders: 'id, orderNumber, status, scheduledDate, _syncStatus',
       attachments: 'id, workOrderId, status, createdAt, timestamp',
       outbox: 'mutationId, workOrderId, actionType, status, timestamp',
       syncMeta: 'key',
     });
+    this.version(5).stores({
+      workOrders: 'id, orderNumber, status, scheduledDate, _syncStatus',
+      attachments: 'id, workOrderId, status, serverAttachmentId, createdAt, timestamp',
+      outbox: 'mutationId, workOrderId, actionType, status, timestamp',
+      syncMeta: 'key',
+    });
   }
 }
 
-export const localDb = new FieldFlowDatabase();
+const dbInstances = new Map<string, FieldFlowDatabase>();
+
+export const getTechnicianDb = (technicianId?: string | number): FieldFlowDatabase => {
+  const dbName = getTechnicianDbName(technicianId);
+  if (!dbInstances.has(dbName)) {
+    dbInstances.set(dbName, new FieldFlowDatabase(dbName));
+  }
+  return dbInstances.get(dbName)!;
+};
+
+export const checkAndCleanupDbOnLogout = async (): Promise<void> => {
+  try {
+    const activeDb = getTechnicianDb();
+    const outboxCount = await activeDb.outbox.count()
+
+    if (outboxCount === 0) {
+      const dbName = activeDb.name;
+      activeDb.close();
+      await Dexie.delete(dbName);
+      dbInstances.delete(dbName);
+    }
+  } catch {
+    // Leave database intact if check encounters an error
+  }
+};
+
+export const localDb = new Proxy({} as FieldFlowDatabase, {
+  get(_target, prop: string | symbol) {
+    const activeDb = getTechnicianDb();
+    const value = Reflect.get(activeDb, prop, activeDb);
+    return typeof value === 'function' ? value.bind(activeDb) : value;
+  },
+});
+
 export const db = localDb;
+
+
+

@@ -1,4 +1,4 @@
-import { Model, Sequelize, DataTypes } from 'sequelize';
+import { Model, Sequelize, DataTypes, Op } from 'sequelize';
 
 export interface WorkOrderAttachmentAttributes {
   id?: string;
@@ -89,7 +89,18 @@ export default function (sequelize: Sequelize, dataTypes: typeof DataTypes) {
       tableName: 'work_order_attachments',
       underscored: true,
       timestamps: true,
-      indexes: [{ fields: ['work_order_id'] }, { fields: ['technician_id'] }, { fields: ['client_local_id'] }],
+      indexes: [
+        { fields: ['work_order_id'] },
+        { fields: ['technician_id'] },
+        {
+          fields: ['work_order_id', 'client_local_id'],
+          unique: true,
+          name: 'idx_work_order_attachments_wo_client_local',
+          where: {
+            client_local_id: { [Op.ne]: null },
+          },
+        },
+      ],
     },
   );
 
