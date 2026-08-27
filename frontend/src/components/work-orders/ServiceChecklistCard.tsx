@@ -4,13 +4,15 @@ import type { WorkOrderChecklistItem } from '../../services/workOrderService';
 
 export interface ServiceChecklistCardProps {
   checklistItems?: WorkOrderChecklistItem[];
-  onToggleItem: (checklistId: string, currentStatus: boolean) => void;
+  onToggleItem?: (checklistId: string, currentStatus: boolean) => void;
+  disabled?: boolean;
   className?: string;
 }
 
 export const ServiceChecklistCard: FC<ServiceChecklistCardProps> = ({
   checklistItems = [],
   onToggleItem,
+  disabled = false,
   className = '',
 }) => {
   const completedCount = checklistItems.filter((i) => i.isCompleted).length;
@@ -39,22 +41,30 @@ export const ServiceChecklistCard: FC<ServiceChecklistCardProps> = ({
             <div
               key={item.id}
               role='button'
-              tabIndex={0}
+              tabIndex={disabled ? -1 : 0}
               onClick={() => {
-                onToggleItem(item.id, item.isCompleted)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onToggleItem(item.id, item.isCompleted);
+                if (!disabled) {
+                  onToggleItem?.(item.id, item.isCompleted);
                 }
               }}
-              className='flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50/80 transition-colors cursor-pointer group border border-slate-100/80 hover:border-slate-200 shadow-2xs select-none'
+              onKeyDown={(e) => {
+                if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  onToggleItem?.(item.id, item.isCompleted);
+                }
+              }}
+              className={`flex items-start gap-3 p-3 rounded-xl transition-colors select-none border shadow-2xs ${
+                disabled
+                  ? 'bg-slate-50/50 border-slate-100 cursor-not-allowed opacity-80'
+                  : 'hover:bg-slate-50/80 cursor-pointer group border-slate-100/80 hover:border-slate-200'
+              }`}
             >
               <div
                 className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 transition-all shadow-2xs ${
                   item.isCompleted
                     ? 'bg-[#D12026] text-white border-0'
+                    : disabled
+                    ? 'border-2 border-slate-200 bg-slate-100'
                     : 'border-2 border-slate-300 bg-white group-hover:border-[#D12026]'
                 }`}
               >

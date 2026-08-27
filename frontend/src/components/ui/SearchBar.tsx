@@ -1,5 +1,5 @@
 import { forwardRef, type InputHTMLAttributes, type ChangeEvent } from 'react';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface SearchBarProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
@@ -51,6 +51,17 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
           )}
           {...rest}
         />
+
+        {value && onClear && !disabled && (
+          <button
+            type='button'
+            onClick={onClear}
+            aria-label='Clear search'
+            className='absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer'
+          >
+            <X className='w-3.5 h-3.5' />
+          </button>
+        )}
       </div>
     );
   }

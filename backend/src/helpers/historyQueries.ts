@@ -1,5 +1,6 @@
 import { Transaction } from 'sequelize';
 import { WorkOrderHistory, User } from '../models';
+import { isValidUuid } from '../utils';
 
 export interface RecordHistoryInput {
   workOrderId: string;
@@ -9,9 +10,6 @@ export interface RecordHistoryInput {
   metadata?: Record<string, any> | null;
   transaction?: Transaction;
 }
-
-const isValidUuid = (val: any): boolean =>
-  typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 
 export const recordWorkOrderHistory = async ({
   workOrderId,

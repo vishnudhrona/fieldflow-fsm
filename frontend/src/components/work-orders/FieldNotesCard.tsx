@@ -1,18 +1,19 @@
-import { useEffect, useState, type FC, type KeyboardEvent } from 'react';
+import type { FC, KeyboardEvent } from 'react';
 import { MessageSquareText, RefreshCw, AlertCircle, CloudOff } from 'lucide-react';
 import { Input } from '../ui';
 import type { WorkOrderNoteItem } from '../../services/workOrderService';
-import { useNetwork } from '../../context/NetworkContext';
+import { formatTimeStr } from '../../utils';
 
 export interface FieldNotesCardProps {
   notes?: WorkOrderNoteItem[];
   newNoteText: string;
   onNoteTextChange: (value: string) => void;
-  onAddNote: () => void;
+  onAddNote?: () => void;
   isSyncing?: boolean;
   pendingCount?: number;
   hasSyncError?: boolean;
   onRetrySync?: () => void;
+  disabled?: boolean;
   className?: string;
 }
 
@@ -25,19 +26,13 @@ export const FieldNotesCard: FC<FieldNotesCardProps> = ({
   pendingCount = 0,
   hasSyncError = false,
   onRetrySync,
+  disabled = false,
   className = '',
 }) => {
-  const { isOnline } = useNetwork();
-  const [value, setValue] = useState(false);
-
-  useEffect(() => {
-    if (isOnline) setValue(true);
-  }, [isOnline, value]);
-
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !disabled && newNoteText.trim()) {
       e.preventDefault();
-      onAddNote();
+      onAddNote?.();
     }
   };
 
@@ -85,10 +80,11 @@ export const FieldNotesCard: FC<FieldNotesCardProps> = ({
 
       <div className='pt-1'>
         <Input
-          placeholder='Add observation or note (Press Enter to post)...'
+          placeholder={disabled ? 'Work order is cancelled' : 'Add observation or note (Press Enter to post)...'}
           value={newNoteText}
           onChange={(e) => onNoteTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
+          disabled={disabled}
         />
       </div>
 
@@ -101,13 +97,7 @@ export const FieldNotesCard: FC<FieldNotesCardProps> = ({
             const authorRole = note.user?.role ? note.user.role.replace('_', ' ') : null;
             const initial = note.type === 'SYSTEM' ? 'S' : authorName.charAt(0).toUpperCase() || 'N';
 
-            const timeStr = note.createdAt
-              ? new Date(note.createdAt).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true,
-                })
-              : '';
+            const timeStr = note.createdAt ? formatTimeStr(note.createdAt) : '';
 
             return (
               <div key={note.id} className='flex items-start gap-2.5'>

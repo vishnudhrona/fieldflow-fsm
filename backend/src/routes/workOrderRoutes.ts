@@ -11,6 +11,7 @@ import {
   deleteAttachment,
 } from '../controllers/attachmentController';
 import { authenticateJWT, authorizeRoles } from '../middlewares/authMiddleware';
+import { idempotencyMiddleware } from '../middlewares/idempotencyMiddleware';
 import { upload } from '../middlewares/uploadMiddleware';
 import { uploadLimiter } from '../middlewares/rateLimiter';
 import { ROLES } from '../config/constants';
@@ -21,7 +22,7 @@ router.use(authenticateJWT);
 
 router.get('/', getWorkOrders);
 router.get('/:id', getWorkOrder);
-router.post('/', authorizeRoles(ROLES.ADMIN_DISPATCHER), createWorkOrder);
+router.post('/', idempotencyMiddleware(), authorizeRoles(ROLES.ADMIN_DISPATCHER), createWorkOrder);
 router.put('/:id', authorizeRoles(ROLES.ADMIN_DISPATCHER), updateWorkOrder);
 
 router.get('/:id/attachments', getAttachments);

@@ -32,7 +32,7 @@ export function useStorageQuota(): StorageQuotaInfo {
         if (navigator.storage.estimate) {
           const estimate = await navigator.storage.estimate();
           console.log(34, estimate);
-          
+
           const u = estimate.usage || 0;
           const q = estimate.quota || 0;
           setUsage(u);
@@ -69,7 +69,7 @@ export function useStorageQuota(): StorageQuotaInfo {
   }, [checkStorage]);
 
   return {
-    usage,  
+    usage,
     quota,
     percentUsed,
     usageFormatted: formatBytes(usage),

@@ -6,7 +6,6 @@ import { PrimaryLayout } from './main-layout/PrimaryLayout';
 import LoginLayout from './main-layout/LoginLayout';
 import { ProtectedRoute } from './components/auth';
 import { UserRole } from './services/authService';
-import { useNetwork } from './context/NetworkContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -31,11 +30,9 @@ const PageLoader: FC = () => (
 );
 
 const AppRoutes: FC = () => {
-  const { reconnectCount } = useNetwork();
-
   return (
     <Suspense fallback={<PageLoader />}>
-      <Routes key={`routes-reconnect-${reconnectCount}`}>
+      <Routes>
         <Route element={<LoginLayout />}>
           <Route path='/login' element={<LoginPage />} />
         </Route>

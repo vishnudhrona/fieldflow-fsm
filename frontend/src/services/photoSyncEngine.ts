@@ -1,28 +1,20 @@
 import api from './api';
 import { localDb, type WorkOrderAttachment } from './db';
 import { deleteImageFromS3 } from './uploadService';
+import { syncEngine } from './syncEngine';
+import { isDeviceOnline, formatTimeStr } from '../utils';
 
 export class PhotoSyncEngine {
   private isUploading = false;
 
   public isDeviceOnline(): boolean {
-    try {
-      const simulated = localStorage.getItem('fsm_simulated_network');
-      if (simulated === 'OFFLINE') return false;
-      return typeof navigator !== 'undefined' ? navigator.onLine : true;
-    } catch {
-      return true;
-    }
+    return isDeviceOnline();
   }
 
   async queuePhotoAttachment(workOrderId: string, file: File): Promise<WorkOrderAttachment> {
     const id = `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const previewUrl = URL.createObjectURL(file);
-    const timeStr = new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
+    const timeStr = formatTimeStr();
 
     const wo = await localDb.workOrders.get(workOrderId);
     const record: WorkOrderAttachment = {
@@ -164,30 +156,77 @@ export class PhotoSyncEngine {
   }
 
   async deletePhoto(id: string): Promise<void> {
-    const photo = await localDb.attachments.get(id);
+    let photo = await localDb.attachments.get(id);
+    if (!photo) {
+      photo = await localDb.attachments.filter((a) => a.serverAttachmentId === id).first();
+    }
+    if (!photo && !id.startsWith('srv-')) {
+      photo = await localDb.attachments.get(`srv-${id}`);
+    }
+
+    const serverId =
+      photo?.serverAttachmentId ||
+      (id.startsWith('srv-') ? id.replace('srv-', '') : (!id.startsWith('att-') ? id : undefined));
+    const targetWorkOrderId = photo?.workOrderId;
+
     if (photo) {
-      if (this.isDeviceOnline()) {
-        if (photo.serverAttachmentId && photo.workOrderId) {
-          api.delete(`/work-orders/${photo.workOrderId}/attachments/${photo.serverAttachmentId}`).catch(() => {});
-        } else if (photo.url) {
-          deleteImageFromS3(photo.url).catch(() => {});
+      await localDb.attachments.delete(photo.id);
+      if (photo.serverAttachmentId) {
+        const matching = await localDb.attachments.filter((a) => a.serverAttachmentId === photo?.serverAttachmentId).toArray();
+        for (const m of matching) {
+          await localDb.attachments.delete(m.id);
         }
       }
+    } else {
       await localDb.attachments.delete(id);
+    }
 
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('fsm:photo_queue_updated', { detail: { workOrderId: photo.workOrderId, deletedId: id } }));
+    if (targetWorkOrderId) {
+      const wo = await localDb.workOrders.get(targetWorkOrderId);
+      if (wo && wo.attachments) {
+        wo.attachments = wo.attachments.filter(
+          (a: any) => a.id !== id && a.id !== serverId && a.id !== photo?.id
+        );
+        await localDb.workOrders.put(wo);
       }
+    }
+
+    if (serverId && targetWorkOrderId) {
+      if (this.isDeviceOnline()) {
+        api.delete(`/work-orders/${targetWorkOrderId}/attachments/${serverId}`).catch(() => {});
+      } else {
+        await syncEngine.enqueueMutation(targetWorkOrderId, 'DELETE_ATTACHMENT', {
+          attachmentId: serverId,
+        });
+      }
+    } else if (photo?.url && this.isDeviceOnline()) {
+      deleteImageFromS3(photo.url).catch(() => {});
+    }
+
+    if (typeof window !== 'undefined' && targetWorkOrderId) {
+      window.dispatchEvent(
+        new CustomEvent('fsm:photo_queue_updated', {
+          detail: { workOrderId: targetWorkOrderId, deletedId: id },
+        }),
+      );
     }
   }
 
   async syncServerAttachments(workOrderId: string, serverAttachments?: any[]): Promise<void> {
-    if (!serverAttachments || serverAttachments.length === 0) return;
+    if (!serverAttachments) return;
 
     const localList = await localDb.attachments
       .where('workOrderId')
       .equals(workOrderId)
       .toArray();
+
+    // Prune locally synced attachments that have been removed on the server
+    const serverIdSet = new Set(serverAttachments.map((s) => s.id).filter(Boolean));
+    for (const local of localList) {
+      if (local.status === 'SYNCED' && local.serverAttachmentId && !serverIdSet.has(local.serverAttachmentId)) {
+        await localDb.attachments.delete(local.id);
+      }
+    }
 
     const existingServerIds = new Set(
       localList.map((a) => a.serverAttachmentId || a.id).filter(Boolean),
@@ -200,17 +239,7 @@ export class PhotoSyncEngine {
       }
 
       const createdTime = srv.createdAt ? new Date(srv.createdAt).getTime() : Date.now();
-      const timeStr = srv.createdAt
-        ? new Date(srv.createdAt).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-          })
-        : new Date().toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-          });
+      const timeStr = formatTimeStr(srv.createdAt);
 
       const record: WorkOrderAttachment = {
         id: `srv-${srv.id}`,
