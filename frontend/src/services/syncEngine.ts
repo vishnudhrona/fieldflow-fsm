@@ -227,7 +227,7 @@ export class SyncEngine {
           const wo = await localDb.workOrders.get(mutation.workOrderId);
           if (wo) {
             const updatedWo = result.serverData
-              ? { ...wo, ...result.serverData, _syncStatus: 'SYNCED' as const, _cachedAt: Date.now() }
+              ? { ...wo, ...result.serverData, _syncStatus: 'CONFLICT' as const, _cachedAt: Date.now() }
               : { ...wo, _syncStatus: 'CONFLICT' as const };
             await localDb.workOrders.put(updatedWo);
           }
@@ -405,8 +405,22 @@ export class SyncEngine {
   async retryMutation(mutationId: string): Promise<void> {
     const mutation = await localDb.outbox.get(mutationId);
     if (mutation) {
+      const wo = await localDb.workOrders.get(mutation.workOrderId);
+      if (wo && wo.version !== undefined) {
+        mutation.baseVersion = wo.version;
+      }
+
+      if (mutation.status === 'CONFLICT') {
+        await localDb.outbox.delete(mutationId);
+        mutation.mutationId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `mut-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      }
+
       mutation.status = 'PENDING';
       mutation.errorMessage = undefined;
+      mutation.timestamp = Date.now();
       await localDb.outbox.put(mutation);
       if (this.isDeviceOnline()) {
         await this.processOutbox();

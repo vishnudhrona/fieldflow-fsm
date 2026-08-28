@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { setVerifiedConnectivityStatus } from '../utils/networkUtils';
 
 export type NetworkMode = 'ONLINE' | 'OFFLINE';
 
@@ -92,6 +93,10 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const isOnline = browserOnline && networkMode !== 'OFFLINE';
+
+  useEffect(() => {
+    setVerifiedConnectivityStatus(isOnline);
+  }, [isOnline]);
 
   return (
     <NetworkContext.Provider value={{ isOnline, browserOnline, networkMode, reconnectCount, setNetworkMode }}>

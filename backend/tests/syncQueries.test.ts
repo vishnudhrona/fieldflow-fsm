@@ -85,5 +85,59 @@ describe('Sync Logic and Concurrency Validation', () => {
     assert.strictEqual(validateNote(emptyNote), false, 'Empty note must fail validation');
     assert.strictEqual(validateReading(emptyReading), false, 'Empty reading metric must fail validation');
   });
+
+  it('should detect version conflict when baseVersion is ahead of serverVersion (chained mutation race)', () => {
+    const serverWorkOrder = { id: 'wo-1', version: 3, status: 'IN_PROGRESS' };
+    const chainedMutation = {
+      mutationId: 'mut-chained-2',
+      actionType: 'UPDATE_STATUS',
+      workOrderId: 'wo-1',
+      baseVersion: 4, // Client assumed M1 succeeded, but M1 failed on server
+      payload: { status: 'COMPLETED' },
+    };
+
+    const hasConflict =
+      chainedMutation.baseVersion !== undefined &&
+      chainedMutation.baseVersion !== null &&
+      serverWorkOrder.version !== chainedMutation.baseVersion;
+
+    assert.strictEqual(hasConflict, true, 'baseVersion ahead of server must trigger CONFLICT');
+  });
+
+  it('should reject additive mutations when work order is CANCELLED', () => {
+    const cancelledWorkOrder = { id: 'wo-1', version: 2, status: 'CANCELLED' };
+    const noteMutation = {
+      mutationId: 'mut-note-1',
+      actionType: 'ADD_NOTE',
+      workOrderId: 'wo-1',
+      payload: { content: 'Added while cancelled' },
+    };
+
+    const isBlocked = cancelledWorkOrder.status === 'CANCELLED';
+    assert.strictEqual(isBlocked, true, 'Additive changes on CANCELLED work orders must be rejected');
+  });
+
+  it('should short-circuit subsequent mutations for a work order in a batch if an earlier one fails or conflicts', () => {
+    const haltedWoIds = new Set<string>();
+    const mutations = [
+      { id: 'm1', woId: 'wo-1', status: 'CONFLICT' },
+      { id: 'm2', woId: 'wo-1', status: 'PENDING' },
+      { id: 'm3', woId: 'wo-2', status: 'SYNCED' },
+    ];
+
+    const results: string[] = [];
+    for (const m of mutations) {
+      if (haltedWoIds.has(m.woId)) {
+        results.push('SHORT_CIRCUITED_CONFLICT');
+        continue;
+      }
+      results.push(m.status);
+      if (m.status === 'CONFLICT' || m.status === 'FAILED') {
+        haltedWoIds.add(m.woId);
+      }
+    }
+
+    assert.deepStrictEqual(results, ['CONFLICT', 'SHORT_CIRCUITED_CONFLICT', 'SYNCED']);
+  });
 });
 

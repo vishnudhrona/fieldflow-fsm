@@ -145,9 +145,12 @@ export const executeSingleMutation = async (
 
       if (result.status === 'CONFLICT') {
         await persistConflictRecord(mutation, actor, result, t);
+        await releaseSyncOperation(newClaim.operationId).catch(() => {});
+      } else if (result.status === 'FAILED') {
+        await releaseSyncOperation(newClaim.operationId).catch(() => {});
+      } else {
+        await completeSyncOperation(newClaim.operationId, 'SUCCEEDED', result, t);
       }
-
-      await completeSyncOperation(newClaim.operationId, 'SUCCEEDED', result, t);
       return result;
     });
   } catch (err: any) {
@@ -177,18 +180,18 @@ const applyMutationInTransaction = async (
   const wo = authorization.workOrder;
   const actorId = actor.id;
 
-  if (actionType === 'UPDATE_STATUS' || actionType === 'COMPLETE_JOB') {
-    if (wo.status === 'CANCELLED') {
-      return {
-        mutationId: mutation.mutationId,
-        status: 'CONFLICT',
-        errorMessage: 'Work order was cancelled by dispatcher while change was queued offline',
-        currentVersion: wo.version,
-        serverData: wo.toJSON(),
-      };
-    }
+  if (wo.status === 'CANCELLED') {
+    return {
+      mutationId: mutation.mutationId,
+      status: 'CONFLICT',
+      errorMessage: 'Work order was cancelled by dispatcher while change was queued offline',
+      currentVersion: wo.version,
+      serverData: wo.toJSON(),
+    };
+  }
 
-    if (baseVersion !== undefined && baseVersion !== null && (wo.version || 1) > baseVersion) {
+  if (actionType === 'UPDATE_STATUS' || actionType === 'COMPLETE_JOB') {
+    if (baseVersion !== undefined && baseVersion !== null && (wo.version || 1) !== baseVersion) {
       return {
         mutationId: mutation.mutationId,
         status: 'CONFLICT',
@@ -379,9 +382,24 @@ export const processBatchMutations = async (
   actor: SyncActor,
 ): Promise<BatchMutationResult[]> => {
   const results: BatchMutationResult[] = [];
+  const haltedWorkOrders = new Set<string>();
+
   for (const mutation of mutations) {
+    if (haltedWorkOrders.has(mutation.workOrderId)) {
+      results.push({
+        mutationId: mutation.mutationId,
+        status: 'CONFLICT',
+        errorMessage: 'Prior mutation on this work order encountered a conflict or failed in this batch',
+      });
+      continue;
+    }
+
     const result = await executeSingleMutation(mutation, actor);
     results.push(result);
+
+    if (result.status === 'CONFLICT' || result.status === 'FAILED') {
+      haltedWorkOrders.add(mutation.workOrderId);
+    }
   }
   return results;
 };

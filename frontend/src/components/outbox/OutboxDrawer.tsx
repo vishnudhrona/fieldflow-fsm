@@ -426,8 +426,27 @@ export const OutboxDrawer: FC<OutboxDrawerProps> = ({ isOpen, onClose }) => {
 
                     <div className='pt-2.5 flex items-center gap-3'>
                       <div className='w-12 h-12 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 shadow-2xs'>
-                        {att.previewUrl || att.url ? (
-                          <img src={att.previewUrl || att.url} alt={att.name} className='w-full h-full object-cover' />
+                        {att.url || att.previewUrl || att.blob ? (
+                          <img
+                            src={
+                              att.status === 'SYNCED' && att.url
+                                ? att.url
+                                : att.url || (att.blob ? URL.createObjectURL(att.blob) : att.previewUrl)
+                            }
+                            alt={att.name}
+                            className='w-full h-full object-cover'
+                            onError={(e) => {
+                              if (att.url && e.currentTarget.src !== att.url) {
+                                e.currentTarget.src = att.url;
+                              } else if (att.blob) {
+                                try {
+                                  e.currentTarget.src = URL.createObjectURL(att.blob);
+                                } catch {
+                                  // ignore fallback error
+                                }
+                              }
+                            }}
+                          />
                         ) : (
                           <div className='w-full h-full flex items-center justify-center text-slate-400'>
                             <Camera className='w-5 h-5' />

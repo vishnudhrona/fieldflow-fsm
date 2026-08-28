@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react';
+import { useState, useEffect, useMemo, type FC } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { AlertCircle, CheckCircle2, UserCheck, Edit, Play, X, XCircle, RefreshCw } from 'lucide-react';
@@ -56,9 +56,25 @@ export const WorkOrderDetailsPage: FC = () => {
   );
 
   const workOrder = liveWorkOrder || workOrderState;
-  const attachments = (liveAttachments && liveAttachments.length > 0 ? liveAttachments : attachmentsState)
+  const rawAttachments = (liveAttachments && liveAttachments.length > 0 ? liveAttachments : attachmentsState)
     .slice()
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  const attachments = useMemo(() => {
+    return rawAttachments.map((att) => {
+      if (att.status === 'SYNCED' && att.url) {
+        return { ...att, previewUrl: att.url };
+      }
+      if (att.blob) {
+        try {
+          return { ...att, previewUrl: URL.createObjectURL(att.blob) };
+        } catch {
+          return att;
+        }
+      }
+      return att;
+    });
+  }, [rawAttachments]);
 
   const setWorkOrder = (updater: WorkOrder | null | ((prev: WorkOrder | null) => WorkOrder | null)) => {
     setWorkOrderState(updater);
@@ -137,14 +153,19 @@ export const WorkOrderDetailsPage: FC = () => {
       syncEngine.getCachedWorkOrderById(id).then((cached) => {
         if (cached) setWorkOrder(cached);
       });
+      photoSyncEngine.getPhotosForWorkOrder(id).then((photos) => {
+        if (photos) setAttachments(photos);
+      });
     };
 
     window.addEventListener('fsm:sync_completed', handleUpdate);
     window.addEventListener('fsm:photo_queue_updated', handleUpdate);
+    window.addEventListener('fsm:photo_sync_completed', handleUpdate);
 
     return () => {
       window.removeEventListener('fsm:sync_completed', handleUpdate);
       window.removeEventListener('fsm:photo_queue_updated', handleUpdate);
+      window.removeEventListener('fsm:photo_sync_completed', handleUpdate);
     };
   }, [id]);
 
@@ -421,6 +442,13 @@ export const WorkOrderDetailsPage: FC = () => {
                 <span className='flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'>
                   <span className='w-1.5 h-1.5 rounded-full bg-amber-500' />
                   Pending Cloud Sync
+                </span>
+              )}
+
+              {workOrder._syncStatus === 'CONFLICT' && (
+                <span className='flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200'>
+                  <span className='w-1.5 h-1.5 rounded-full bg-purple-500' />
+                  Sync Conflict
                 </span>
               )}
             </div>

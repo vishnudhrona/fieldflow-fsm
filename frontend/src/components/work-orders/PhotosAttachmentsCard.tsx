@@ -158,7 +158,10 @@ export const PhotosAttachmentsCard: FC<PhotosAttachmentsCardProps> = ({
       {attachments.length > 0 && (
         <div className='grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1'>
           {attachments.map((att) => {
-            const displayUrl = att.previewUrl || att.url;
+            const displayUrl =
+              att.status === 'SYNCED' && att.url
+                ? att.url
+                : att.previewUrl || att.url;
 
             return (
               <div
@@ -172,7 +175,22 @@ export const PhotosAttachmentsCard: FC<PhotosAttachmentsCardProps> = ({
                   title='Click to enlarge'
                 >
                   {displayUrl ? (
-                    <img src={displayUrl} alt={att.name} className='w-full h-full object-cover' />
+                    <img
+                      src={displayUrl}
+                      alt={att.name}
+                      className='w-full h-full object-cover'
+                      onError={(e) => {
+                        if (att.url && e.currentTarget.src !== att.url) {
+                          e.currentTarget.src = att.url;
+                        } else if (att.blob) {
+                          try {
+                            e.currentTarget.src = URL.createObjectURL(att.blob);
+                          } catch {
+                            // ignore fallback error
+                          }
+                        }
+                      }}
+                    />
                   ) : (
                     <div className='w-full h-full flex items-center justify-center text-slate-400'>
                       <ImageIcon className='w-5 h-5' />

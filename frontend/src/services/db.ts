@@ -119,9 +119,12 @@ export const getTechnicianDb = (technicianId?: string | number): FieldFlowDataba
 export const checkAndCleanupDbOnLogout = async (): Promise<void> => {
   try {
     const activeDb = getTechnicianDb();
-    const outboxCount = await activeDb.outbox.count()
+    const outboxCount = await activeDb.outbox.count();
+    const pendingAttachmentsCount = await activeDb.attachments
+      .filter((a) => a.status !== 'SYNCED')
+      .count();
 
-    if (outboxCount === 0) {
+    if (outboxCount === 0 && pendingAttachmentsCount === 0) {
       const dbName = activeDb.name;
       activeDb.close();
       await Dexie.delete(dbName);
