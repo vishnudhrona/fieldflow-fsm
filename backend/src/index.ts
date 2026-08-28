@@ -13,7 +13,7 @@ import { globalLimiter } from './middlewares/rateLimiter';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '10mb' }));
@@ -41,7 +41,7 @@ app.use('/api/assets', assetRoutes);
 app.use('/api/work-orders', workOrderRoutes);
 app.use('/api/sync', syncRoutes);
 
-app.get('/api/health/ready', async (req: Request, res: Response) => {
+app.get(['/health', '/api/health', '/api/health/ready'], async (req: Request, res: Response) => {
   try {
     await sequelize.authenticate();
     res.status(200).json({
