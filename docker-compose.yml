@@ -1,21 +1,48 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: fieldflow-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-fieldflow_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgrespassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-fieldflow_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
+    container_name: fieldflow-backend
     ports:
       - "8080:8080"
     environment:
       - PORT=8080
-      - DATABASE_URL=${DATABASE_URL:-postgresql://neondb_owner:npg_DJ0blQLYvCI8@ep-fancy-block-ayc7gq2d-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require}
-      - JWT_SECRET=${JWT_SECRET:-94e2c64dc9142c8e49faaa673add2d9b23911638de4b2b7dfcc770c7f3420b03}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgrespassword}@postgres:5432/${DB_NAME:-fieldflow_db}
+      - JWT_SECRET=${JWT_SECRET:-development_super_secret_jwt_key_minimum_32_chars_12345}
       - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: always
 
   frontend:
     build: ./frontend
+    container_name: fieldflow-frontend
     ports:
       - "80:80"
     depends_on:
       - backend
     restart: always
+
+volumes:
+  postgres_data:
+
