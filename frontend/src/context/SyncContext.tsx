@@ -90,6 +90,27 @@ export const SyncProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [isOnline, hasWorkToSync, syncNow]);
 
+  // Periodic exponential/bounded backoff retry while continuously online
+  useEffect(() => {
+    if (!isOnline || isSyncing) return;
+
+    const hasRetryItems = retryCount > 0 || activePendingPhotos.some((a) => a.status === 'FAILED');
+    if (!hasRetryItems) return;
+
+    const maxRetries = Math.max(
+      ...activePendingMutations.map((m) => m.retryCount || 0),
+      ...activePendingPhotos.map((a) => a.retryCount || 0),
+      1,
+    );
+    const delayMs = Math.min(30000, Math.max(5000, maxRetries * 5000));
+
+    const timerId = setTimeout(() => {
+      syncNow();
+    }, delayMs);
+
+    return () => clearTimeout(timerId);
+  }, [isOnline, isSyncing, retryCount, activePendingMutations, activePendingPhotos, syncNow]);
+
   return (
     <SyncContext.Provider
       value={{

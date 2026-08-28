@@ -108,13 +108,43 @@ export class PhotoSyncEngine {
             },
           });
 
-          photo.url = res.data.attachment?.fileUrl || photo.url;
-          photo.serverAttachmentId = res.data.attachment?.id;
+          const serverUrl = res.data.attachment?.fileUrl || photo.url;
+          const serverId = res.data.attachment?.id;
+          photo.url = serverUrl;
+          photo.previewUrl = serverUrl;
+          photo.serverAttachmentId = serverId;
           photo.technicianId = res.data.attachment?.technicianId || res.data.attachment?.technician?.id || null;
           photo.technicianName = res.data.attachment?.technician?.name || null;
           photo.status = 'SYNCED';
           photo.errorMessage = undefined;
           await localDb.attachments.put(photo);
+
+          // Update cached local work order attachments
+          const wo = await localDb.workOrders.get(photo.workOrderId);
+          if (wo) {
+            const currentAttachments = wo.attachments || [];
+            const nowIso = new Date().toISOString();
+            const newAtt = {
+              id: serverId || photo.id,
+              workOrderId: photo.workOrderId,
+              fileUrl: serverUrl || photo.url || '',
+              fileName: photo.name,
+              fileSize: photo.size,
+              mimeType: photo.mimeType,
+              technicianId: photo.technicianId,
+              technician: photo.technicianName ? { id: photo.technicianId || '', name: photo.technicianName, email: '' } : undefined,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+            };
+            const alreadyPresent = currentAttachments.some(
+              (a: any) => a.id === newAtt.id || a.fileUrl === serverUrl
+            );
+            if (!alreadyPresent) {
+              wo.attachments = [newAtt, ...currentAttachments];
+              await localDb.workOrders.put(wo);
+            }
+          }
+
           uploadedCount++;
         } catch (err: any) {
           photo.status = 'FAILED';
@@ -220,10 +250,15 @@ export class PhotoSyncEngine {
       .equals(workOrderId)
       .toArray();
 
-    // Prune locally synced attachments that have been removed on the server
+    // Only prune srv- prefixed attachments that were downloaded from server and are no longer in serverAttachments
     const serverIdSet = new Set(serverAttachments.map((s) => s.id).filter(Boolean));
     for (const local of localList) {
-      if (local.status === 'SYNCED' && local.serverAttachmentId && !serverIdSet.has(local.serverAttachmentId)) {
+      if (
+        local.status === 'SYNCED' &&
+        local.serverAttachmentId &&
+        local.id.startsWith('srv-') &&
+        !serverIdSet.has(local.serverAttachmentId)
+      ) {
         await localDb.attachments.delete(local.id);
       }
     }
@@ -275,7 +310,13 @@ export class PhotoSyncEngine {
     photos.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     return photos.map((photo) => {
-      if (photo.blob && (!photo.url || photo.status !== 'SYNCED' || (photo.previewUrl && photo.previewUrl.startsWith('blob:')))) {
+      if (photo.status === 'SYNCED' && photo.url) {
+        return {
+          ...photo,
+          previewUrl: photo.url,
+        };
+      }
+      if (photo.blob) {
         try {
           return {
             ...photo,

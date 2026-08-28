@@ -124,7 +124,12 @@ export const createAttachmentRecord = async (data: CreateAttachmentInput) => {
   } catch (err: any) {
     if (err?.name === 'SequelizeUniqueConstraintError' && data.clientLocalId) {
       const existing = await findExistingIdempotentAttachment(data.workOrderId, data.clientLocalId);
-      if (existing) return existing;
+      if (existing) {
+        if (data.fileUrl && data.fileUrl !== existing.fileUrl) {
+          await deleteFileFromS3(data.fileUrl).catch(() => {});
+        }
+        return existing;
+      }
     }
     throw err;
   }
